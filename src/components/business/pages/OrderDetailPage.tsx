@@ -7,6 +7,8 @@ const OrderDetailPage: React.FC<{ orderId: string }> = ({ orderId }) => {
   const industry = typeof window !== 'undefined' ? (localStorage.getItem('preview_industry_id') || window.location.pathname.split('/')[2] || 'fashion') : 'fashion';
   const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -25,35 +27,45 @@ const OrderDetailPage: React.FC<{ orderId: string }> = ({ orderId }) => {
   }, [industry, orderId]);
 
   const handleConfirmPayment = async () => {
+    setActionError(null);
+    setActionLoading('confirmPayment');
     try {
       await OrderFulfillmentService.confirmPayment(industry, orderId, { amount: order.total, method: 'manual', reference: 'admin-confirm' });
-      alert('支付已确认');
-      window.location.reload();
-    } catch (e) {
+      setActionLoading(null);
+      setTimeout(() => window.location.reload(), 700);
+    } catch (e: any) {
       console.error(e);
-      alert('确认支付失败');
+      setActionLoading(null);
+      setActionError(e?.message || '确认支付失败');
     }
   };
 
   const handleAllocate = async () => {
+    setActionError(null);
+    setActionLoading('allocateInventory');
     try {
       await OrderFulfillmentService.allocateInventory(industry, order.items.map((it: any) => ({ skuId: it.skuId, qty: it.qty })));
-      alert('库存已分配');
-      window.location.reload();
-    } catch (e) {
+      setActionLoading(null);
+      setTimeout(() => window.location.reload(), 700);
+    } catch (e: any) {
       console.error(e);
-      alert('分配库存失败');
+      setActionLoading(null);
+      setActionError(e?.message || '分配库存失败');
     }
   };
 
   const handleCreateShipment = async () => {
+    setActionError(null);
+    setActionLoading('createShipment');
     try {
       const sh = await OrderFulfillmentService.createShipment(industry, orderId, { carrier: 'SF', trackingNumber: `SF-${Date.now()}` });
+      setActionLoading(null);
       alert(`已创建运单 ${sh.id}`);
-      window.location.reload();
-    } catch (e) {
+      setTimeout(() => window.location.reload(), 700);
+    } catch (e: any) {
       console.error(e);
-      alert('创建运单失败');
+      setActionLoading(null);
+      setActionError(e?.message || '创建运单失败');
     }
   };
 
@@ -67,10 +79,11 @@ const OrderDetailPage: React.FC<{ orderId: string }> = ({ orderId }) => {
         <div>总计: ¥{order.total}</div>
         <div>状态: {order.status} · 支付: {order.paymentStatus}</div>
         <div className="py-2">
-          <button className="px-3 py-1 bg-emerald-600 text-white rounded mr-2" onClick={handleConfirmPayment}>确认支付</button>
-          <button className="px-3 py-1 bg-orange-600 text-white rounded mr-2" onClick={handleAllocate}>分配库存</button>
-          <button className="px-3 py-1 bg-sky-600 text-white rounded" onClick={handleCreateShipment}>创建运单</button>
+          <button className="px-3 py-1 bg-emerald-600 text-white rounded mr-2" onClick={handleConfirmPayment} disabled={!!actionLoading}>{actionLoading === 'confirmPayment' ? '处理中...' : '确认支付'}</button>
+          <button className="px-3 py-1 bg-orange-600 text-white rounded mr-2" onClick={handleAllocate} disabled={!!actionLoading}>{actionLoading === 'allocateInventory' ? '处理中...' : '分配库存'}</button>
+          <button className="px-3 py-1 bg-sky-600 text-white rounded" onClick={handleCreateShipment} disabled={!!actionLoading}>{actionLoading === 'createShipment' ? '处理中...' : '创建运单'}</button>
         </div>
+        {actionError && <div className="text-sm text-red-600">操作失败：{actionError}</div>}
         <div className="pt-4 border-t">原始数据: <pre className="text-xs bg-slate-100 text-black p-2 rounded overflow-auto">{JSON.stringify(order, null, 2)}</pre></div>
       </div>
     </PagePlaceholder>
