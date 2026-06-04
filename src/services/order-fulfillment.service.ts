@@ -1,4 +1,5 @@
 import { db, collection, doc, addDoc, updateDoc, getDoc, serverTimestamp, increment } from './firebase';
+import { runTransaction, collection as rawCollection, doc as rawDoc, serverTimestamp as rawServerTimestamp } from 'firebase/firestore';
 
 export const OrderFulfillmentService = {
   async createOrder(industryId: string, order: any) {
@@ -78,40 +79,44 @@ export const OrderFulfillmentService = {
     });
 
     return { id: ref.id, ...sh };
+  },
+
+  async createOrderWithAllocation(industryId: string, order: any) {
+    // Create order and deduct inventory atomically using transaction
+    const result = await runTransaction(db as any, async (tx) => {
+      const ordersCol = rawCollection(db as any, `${industryId}_orders`);
+      const orderRef = rawDoc(ordersCol);
+      const now = rawServerTimestamp();
+      const orderData = {
+        ...order,
+        status: 'pending',
+        paymentStatus: 'unpaid',
+        createdAt: now,
+        updatedAt: now
+      };
+
+      // check and reserve inventory
+      for (const it of order.items || []) {
+        const skuRef = rawDoc(rawCollection(db as any, `${industryId}_inventory`), it.skuId);
+        const skuSnap = await tx.get(skuRef);
+        if (!skuSnap.exists()) throw new Error(`SKU not found: ${it.skuId}`);
+        const qty = skuSnap.data()?.quantity || 0;
+        if (qty < it.qty) throw new Error(`Insufficient stock for ${it.skuId}`);
+        tx.update(skuRef, { quantity: qty - it.qty, updatedAt: now });
+      }
+
+      tx.set(orderRef, orderData);
+
+      // create a transaction record
+      const txCol = rawCollection(db as any, `${industryId}_transactions`);
+      const txRef = rawDoc(txCol);
+      tx.set(txRef, { orderId: orderRef.id, amount: order.total || 0, createdAt: now, note: 'order_create' });
+
+      return { id: orderRef.id, ...orderData };
+    });
+
+    return result;
   }
 };
 
 export default OrderFulfillmentService;
-import { Order } from '../types';
-
-export class OrderFulfillmentService {
-  async processNewOrder(order: Order): Promise<Order> {
-    // placeholder: validate, reserve inventory, create payment record
-    order.status = 'processing';
-    order.updatedAt = new Date().toISOString();
-    return order;
-  }
-
-  async shipOrder(orderId: string, carrier: string): Promise<boolean> {
-    // placeholder: create shipment and update order
-    return true;
-  }
-
-  async confirmDelivery(orderId: string, proofUrl?: string): Promise<boolean> {
-    // placeholder: mark delivered
-    return true;
-  }
-
-  async initiateReturn(orderId: string, reason: string): Promise<string> {
-    // placeholder: create a return record and process refund
-    return 'return_' + Date.now();
-  }
-
-  async processReturnRefund(returnId: string): Promise<boolean> {
-    return true;
-  }
-
-  async getOrderMetrics(): Promise<Record<string, any>> {
-    return { totalOrders: 0, pending: 0 };
-  }
-}
