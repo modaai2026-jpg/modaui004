@@ -316,3 +316,25 @@ export function tryInitializeFirebase(): { success: boolean; error?: string } {
     };
   }
 }
+
+// Required collections used by core business modules (template names)
+export const REQUIRED_COLLECTIONS: Record<string, string> = {
+  '{industryId}_orders': 'Order documents with full lifecycle',
+  '{industryId}_order_items': 'Line items for each order',
+  '{industryId}_customers': 'Customer profiles & CRM data',
+  '{industryId}_customer_logs': 'Customer activity logs',
+  '{industryId}_loyalty_points': 'Loyalty program tracking',
+  '{industryId}_inventory': 'Real-time stock levels',
+  '{industryId}_inventory_logs': 'Stock movement history',
+  '{industryId}_sku_variants': 'Product variants (color/size)',
+  '{industryId}_transactions': 'All payment transactions',
+  '{industryId}_billing_records': 'Daily billing summaries',
+  '{industryId}_cost_allocation': 'Cost breakdown per order',
+  '{industryId}_shipments': 'Shipping info & tracking',
+  '{industryId}_returns': 'Return/refund requests',
+  '{industryId}_agent_configs': 'Agent prompt & behavior config',
+  '{industryId}_agent_metrics': 'Agent performance tracking',
+  '{industryId}_campaigns': 'Marketing campaigns',
+  '{industryId}_coupons': 'Discount codes & coupons',
+  '{industryId}_analytics': 'Daily KPI snapshots'
+};

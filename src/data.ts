@@ -40,6 +40,18 @@ export const INDUSTRIES: IndustryData[] = [
         status: 'active',
         tasks: ['检测高腰直筒裤库存红线', '生成服装上架SKU排单表', '评估拼多多店群活动回本周期']
       }
+      ,{
+        role: 'AI计财主管',
+        emoji: '💰',
+        name: 'Riley',
+        desc: '财务核算与成本控制',
+        status: 'active',
+        tasks: [
+          '完成日度营收对账与成本控制',
+          '自动生成财务报表与利润分析',
+          '多平台支付流水核验与风险预警'
+        ]
+      }
     ]
   },
   {
@@ -80,6 +92,18 @@ export const INDUSTRIES: IndustryData[] = [
         desc: '利得计算与自动对账',
         status: 'active',
         tasks: ['核实外卖平台服务费自动对账', '友好拦截并快速安抚起因洒漏退折', '核对支付宝与微信结算账户余额']
+      }
+      ,{
+        role: 'AI计财主管',
+        emoji: '💰',
+        name: 'Edison',
+        desc: '财务核算与成本控制',
+        status: 'active',
+        tasks: [
+          '每日营收对账与成本控制',
+          '自动生成餐饮毛利与食材成本分析',
+          '对接支付渠道完成日终结算'
+        ]
       }
     ]
   },
@@ -122,6 +146,18 @@ export const INDUSTRIES: IndustryData[] = [
         status: 'active',
         tasks: ['全自动向闲鱼派单铺货50起', '扣去代发代扣成本进行财务复核', '友好安抚并自动核退由于运损申请']
       }
+      ,{
+        role: 'AI计财主管',
+        emoji: '💰',
+        name: 'Oscar',
+        desc: '财务核算与成本控制',
+        status: 'active',
+        tasks: [
+          '整合集团库存成本与利润分析',
+          '复杂促销成本分摊计算',
+          '多渠道结算对账与周期性审计'
+        ]
+      }
     ]
   },
   {
@@ -162,6 +198,18 @@ export const INDUSTRIES: IndustryData[] = [
         desc: '疗程排班与错峰派券',
         status: 'active',
         tasks: ['确认周六下午3点面部SPA疗程预约排班', '生成并群发周度到店路线与时间指南', '协助2组时间异常的客群在线重改排表']
+      }
+      ,{
+        role: 'AI计财主管',
+        emoji: '💰',
+        name: 'Violet',
+        desc: '财务核算与成本控制',
+        status: 'active',
+        tasks: [
+          '统计项目收益并生成利润报表',
+          '分析单项服务毛利与成本占比',
+          '跟踪应收账款与预付项'
+        ]
       }
     ]
   },
@@ -204,6 +252,18 @@ export const INDUSTRIES: IndustryData[] = [
         status: 'active',
         tasks: ['实时同步各订房网站房态日盘', '自动回复买家写的精美多图高分评价', '合并汇总全月渠道佣金收益及水电预算']
       }
+      ,{
+        role: 'AI计财主管',
+        emoji: '💰',
+        name: 'Maxwell',
+        desc: '财务核算与成本控制',
+        status: 'active',
+        tasks: [
+          '房价收益与渠道佣金核算',
+          '每日营收对账与现金流监控',
+          '房态成本分摊与异常告警'
+        ]
+      }
     ]
   },
   {
@@ -244,6 +304,18 @@ export const INDUSTRIES: IndustryData[] = [
         desc: '流水核算与售后解答',
         status: 'active',
         tasks: ['核算本场带货GMV、抽金及分销净利', '自动核验各大平台包裹发运妥投率', '友好解答粉丝咨询并秒级赔付保障']
+      }
+      ,{
+        role: 'AI计财主管',
+        emoji: '💰',
+        name: 'Zenith',
+        desc: '财务核算与成本控制',
+        status: 'active',
+        tasks: [
+          '直播场次收益汇总与分账',
+          '计算带货活动成本与返利占比',
+          '支持跨平台结算与退款核对'
+        ]
       }
     ]
   }

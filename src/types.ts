@@ -110,3 +110,70 @@ export interface ChatMessage {
     imageBase64: string;
   };
 }
+
+// --- E-commerce / Financial Types ---
+export interface Order {
+  id: string;
+  orderId: string;
+  customerId: string;
+  items: Array<{ productId: string; skuId?: string; quantity: number; unitPrice: number }>;
+  quantity: number;
+  unitPrice?: number;
+  totalAmount: number;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'completed' | 'cancelled' | 'refunded';
+  shippingProvider?: 'SF' | 'ZTO' | 'RTO' | '顺丰' | '中通' | '圆通' | string;
+  trackingNumber?: string;
+  createdAt: string;
+  updatedAt: string;
+  paymentMethod?: 'wechat' | 'alipay' | 'stripe' | 'paypal' | string;
+  paymentStatus?: 'unpaid' | 'paid' | 'refunded';
+}
+
+export interface Customer {
+  id: string;
+  email: string;
+  phone?: string;
+  name: string;
+  totalSpent: number;
+  orderCount: number;
+  lastOrderDate?: string;
+  loyaltyPoints: number;
+  vipLevel?: 'bronze' | 'silver' | 'gold' | 'platinum';
+  tags: string[];
+}
+
+export interface SKU {
+  id: string;
+  spuId: string;
+  sku: string;
+  name: string;
+  image?: string;
+  color?: string;
+  size?: string;
+  inventory: number;
+  price: number;
+  cost?: number;
+  barcode?: string;
+  status: 'active' | 'discontinued';
+  createdAt?: string;
+}
+
+export interface SPU {
+  id: string;
+  name: string;
+  category?: string;
+  description?: string;
+  images?: string[];
+  skus?: SKU[];
+  rating?: number;
+  salesCount?: number;
+}
+
+export interface FinancialMetrics {
+  date: string;
+  revenue: number;
+  cost: number;
+  grossProfit: number;
+  grossMargin: number;
+  refunds: number;
+}
