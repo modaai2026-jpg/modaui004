@@ -20,6 +20,7 @@ import NotificationCenter from './components/NotificationCenter';
 import AuditLogViewer from './components/AuditLogViewer';
 import MonitoringDashboard from './components/MonitoringDashboard';
 import PlatformSettingsCenter from './components/PlatformSettingsCenter';
+import BusinessDashboard from './components/business/BusinessDashboard';
 import { db } from './services/firebase';
 import { ChatAssistant, ThemeProvider } from './lib/ui';
 import { usePermission, UserRole } from './hooks/usePermission';
@@ -213,6 +214,45 @@ function AppContent() {
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  // When a user logs in, try to fetch their merchant and redirect to industry backend
+  useEffect(() => {
+    const tryRedirectToBusiness = async () => {
+      if (!user) return;
+      try {
+        const { doc, getDoc } = await import('./services/firebase');
+        const userDocRef = doc(db, 'users', user.uid);
+        const userSnap = await getDoc(userDocRef);
+        const userData = userSnap.exists() ? userSnap.data() as any : null;
+        const merchantId = userData?.merchantId;
+        if (merchantId) {
+          const merchantDocRef = doc(db, 'merchants', merchantId);
+          const merchantSnap = await getDoc(merchantDocRef);
+          if (merchantSnap.exists()) {
+            const m = merchantSnap.data() as any;
+            const industryId = m?.industryId;
+            if (industryId) {
+              // find industry in local list and set selectedIndustry
+              const ind = INDUSTRIES.find(i => i.id === industryId);
+              if (ind) {
+                setSelectedIndustry(ind);
+              }
+              // push path to business backend
+              const target = `/business/${industryId}`;
+              if (typeof window !== 'undefined' && window.location.pathname !== target) {
+                window.history.pushState({}, '', target);
+              }
+              setStep('DASHBOARD');
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to redirect to business backend:', e);
+      }
+    };
+
+    void tryRedirectToBusiness();
+  }, [user]);
 
   // Synchronize path when step state changes
   React.useEffect(() => {
@@ -596,6 +636,24 @@ function AppContent() {
         )}
 
         {/* Step 5: Merchant Dashboard (Merchant后台) */}
+        {/* Business backend route: /business/:industry */}
+        {(typeof window !== 'undefined' && window.location.pathname.startsWith('/business')) && (() => {
+          const match = (typeof window !== 'undefined') ? window.location.pathname.match(/^\/business\/([^\/]+)/) : null;
+          const industryId = match ? match[1] : undefined;
+          return (
+            <motion.div
+              key={`business-${industryId || 'unknown'}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              {/* Render the isolated business dashboard */}
+              <BusinessDashboard industryId={industryId as any} />
+            </motion.div>
+          );
+        })()}
+
         {step === 'DASHBOARD' && (
           <motion.div
             key="dashboard"
