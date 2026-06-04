@@ -17,15 +17,25 @@ export const OrderFulfillmentService = {
 
   async confirmPayment(industryId: string, orderId: string, transaction: any) {
     const orderRef = doc(db, `${industryId}_orders`, orderId);
+    const orderSnap = await getDoc(orderRef as any);
+    if (!orderSnap.exists()) throw new Error('Order not found');
+    const orderData = orderSnap.data() as any;
+
+    // Idempotent: 如果已支付则不重复处理
+    if (orderData.paymentStatus === 'paid') {
+      return true;
+    }
+
     const tx = {
       ...transaction,
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      orderId,
     };
     // write transaction record
     const txCol = collection(db, `${industryId}_transactions`);
     await addDoc(txCol, tx);
 
-    // update order
+    // update order atomically-ish (read-check-update)
     await updateDoc(orderRef, {
       paymentStatus: 'paid',
       status: 'processing',
