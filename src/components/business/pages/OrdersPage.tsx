@@ -5,6 +5,8 @@ import OrderFulfillmentService from '../../../services/order-fulfillment.service
 
 const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [lastSample, setLastSample] = useState<any | null>(null);
   const industry = typeof window !== 'undefined' ? (localStorage.getItem('preview_industry_id') || window.location.pathname.split('/')[2] || 'fashion') : 'fashion';
 
   useEffect(() => {
@@ -29,24 +31,44 @@ const OrdersPage: React.FC = () => {
           <button
             className="px-3 py-1 bg-emerald-600 text-white rounded"
             onClick={async () => {
+              setError(null);
+              const sample = {
+                customerId: 'guest-quick',
+                items: [{ skuId: 'sku-1', qty: 1, price: 19.9 }],
+                total: 19.9,
+              };
+              setLastSample(sample);
               try {
-                const sample = {
-                  customerId: 'guest-quick',
-                  items: [{ skuId: 'sku-1', qty: 1, price: 19.9 }],
-                  total: 19.9,
-                };
-                const industryId = industry;
-                const res = await OrderFulfillmentService.createOrderWithAllocation(industryId, sample);
+                const res = await OrderFulfillmentService.createOrderWithAllocation(industry, sample);
                 alert(`下单成功：${res.id}`);
                 window.location.reload();
               } catch (err: any) {
                 console.error('下单失败', err);
-                alert(`下单失败：${err?.message || String(err)}`);
+                setError(err?.message || String(err));
               }
             }}
           >
             下单并保留库存（示例）
           </button>
+
+          {error && (
+            <div className="text-sm text-red-600">
+              <div>错误：{error}</div>
+              <div className="mt-2">
+                <button className="px-2 py-1 bg-yellow-400 rounded mr-2" onClick={async () => {
+                  if (!lastSample) return;
+                  setError(null);
+                  try {
+                    const res = await OrderFulfillmentService.createOrderWithAllocation(industry, lastSample);
+                    alert(`重试成功：${res.id}`);
+                    window.location.reload();
+                  } catch (err: any) {
+                    setError(err?.message || String(err));
+                  }
+                }}>重试</button>
+              </div>
+            </div>
+          )}
         </div>
         {orders.length === 0 && <p>暂无订单。</p>}
         <ul className="space-y-2">

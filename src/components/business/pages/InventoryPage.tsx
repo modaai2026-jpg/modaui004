@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import PagePlaceholder from './PagePlaceholder';
-import { db, collection, getDocs, updateDoc, doc } from '../../../services/firebase';
+import { db, collection, getDocs, updateDoc, doc, addDoc } from '../../../services/firebase';
 
 const InventoryPage: React.FC = () => {
   const [items, setItems] = useState<any[]>([]);
@@ -41,11 +41,40 @@ const InventoryPage: React.FC = () => {
     }
   };
 
+  const [newSku, setNewSku] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newQty, setNewQty] = useState<number>(0);
+
+  const handleCreateSku = async () => {
+    try {
+      const col = collection(db, `${industry}_inventory`);
+      await addDoc(col as any, { sku: newSku || undefined, name: newName, quantity: newQty, createdAt: new Date() });
+      setNewSku(''); setNewName(''); setNewQty(0);
+      // reload
+      const snaps = await getDocs(col as any);
+      const list: any[] = [];
+      snaps.forEach((d: any) => list.push({ id: d.id, ...d.data() }));
+      setItems(list);
+    } catch (e) {
+      console.error('新增 SKU 失败', e);
+      alert('新增 SKU 失败');
+    }
+  };
+
   return (
     <PagePlaceholder title="库存管理">
       {loading && <div>加载中...</div>}
       {!loading && (
         <div>
+          <div className="p-4 border rounded bg-white mb-4">
+            <div className="font-medium mb-2">新增 SKU</div>
+            <div className="flex gap-2">
+              <input placeholder="SKU id (可选)" value={newSku} onChange={e => setNewSku(e.target.value)} className="border p-2 rounded" />
+              <input placeholder="名称" value={newName} onChange={e => setNewName(e.target.value)} className="border p-2 rounded" />
+              <input type="number" placeholder="数量" value={newQty} onChange={e => setNewQty(Number(e.target.value))} className="border p-2 rounded w-28" />
+              <button className="px-3 py-1 bg-sky-600 text-white rounded" onClick={handleCreateSku}>新增</button>
+            </div>
+          </div>
           {items.length === 0 && <div>暂无库存记录。</div>}
           <ul className="space-y-2">
             {items.map(it => (

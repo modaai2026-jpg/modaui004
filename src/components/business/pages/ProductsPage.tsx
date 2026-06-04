@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import PagePlaceholder from './PagePlaceholder';
-import { db, collection, getDocs, addDoc } from '../../../services/firebase';
+import { db, collection, getDocs, addDoc, deleteDoc, updateDoc, doc } from '../../../services/firebase';
 
 const ProductsPage: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -42,6 +42,29 @@ const ProductsPage: React.FC = () => {
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('确认删除该商品？')) return;
+    try {
+      const ref = doc(db, `${industry}_products`, id);
+      await deleteDoc(ref as any);
+      setProducts(products.filter(p => p.id !== id));
+    } catch (e) {
+      console.error('删除失败', e);
+      alert('删除失败');
+    }
+  };
+
+  const handleEdit = async (id: string, field: string, value: any) => {
+    try {
+      const ref = doc(db, `${industry}_products`, id);
+      await updateDoc(ref as any, { [field]: value, updatedAt: new Date() });
+      setProducts(products.map(p => p.id === id ? { ...p, [field]: value } : p));
+    } catch (e) {
+      console.error('更新失败', e);
+      alert('更新失败');
+    }
+  };
+
   return (
     <PagePlaceholder title="商品管理">
       {loading && <div>加载中...</div>}
@@ -63,8 +86,12 @@ const ProductsPage: React.FC = () => {
                   <div className="font-medium">{p.name}</div>
                   <div className="text-sm text-slate-600">¥{p.price}</div>
                 </div>
-                <div>
-                  <button className="px-3 py-1 bg-gray-200 rounded">编辑</button>
+                <div className="space-x-2">
+                  <button className="px-3 py-1 bg-gray-200 rounded" onClick={() => {
+                    const newName = prompt('修改商品名', p.name);
+                    if (newName !== null) handleEdit(p.id, 'name', newName);
+                  }}>编辑</button>
+                  <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={() => handleDelete(p.id)}>删除</button>
                 </div>
               </li>
             ))}
