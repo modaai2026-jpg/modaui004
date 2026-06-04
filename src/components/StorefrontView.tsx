@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Smartphone, Palette, Check, Save, Sparkles, Phone, HelpCircle, Eye, 
-  MapPin, Sliders, Globe, RefreshCcw, Building
+  MapPin, Sliders, Globe, RefreshCcw, Building, Layout
 } from 'lucide-react';
 import { db, doc, setDoc, onSnapshot } from '../services/firebase';
+import { INDUSTRY_TEMPLATES } from './StorefrontTemplates';
 
 interface VisualTheme {
   id: 'classic' | 'dark' | 'retro' | 'royal' | 'indigo';
@@ -45,25 +46,39 @@ export default function StorefrontView({ tenantId, industryId, onAddLog }: Store
 
   // Core settings synchronized with Firestore
   const [selectedThemeId, setSelectedThemeId] = useState<'classic' | 'dark' | 'retro' | 'royal' | 'indigo'>('classic');
+  const [templateIndex, setTemplateIndex] = useState(0);
   const [storeHeadline, setStoreHeadline] = useState(getIndustryDefaultHeadline(industryId));
   const [phoneContact, setPhoneContact] = useState('400-820-8820');
   const [deliveryType, setDeliveryType] = useState<'takeout' | 'delivery' | 'dine_in'>('delivery');
   const [logoImage, setLogoImage] = useState('💫');
+  
+  // NEW: Real persistent fields for Task 04
+  const [customDomain, setCustomDomain] = useState('');
+  const [seoTitle, setSeoTitle] = useState('');
+  const [isStoreOnline, setIsStoreOnline] = useState(true);
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Sync settings live
+  // Sync settings live - USING MERCHANTS COLLECTION
   useEffect(() => {
-    let activeTenant = tenantId || 'default_tenant';
-    const unsub = onSnapshot(doc(db, 'tenants', activeTenant), (docSnap) => {
+    if (!tenantId) {
+      setLoading(false);
+      return;
+    }
+    const unsub = onSnapshot(doc(db, 'merchants', tenantId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.storeTheme) setSelectedThemeId(data.storeTheme);
-        if (data.storeHeadline) setStoreHeadline(data.storeHeadline);
-        if (data.phoneContact) setPhoneContact(data.phoneContact);
-        if (data.deliveryType) setDeliveryType(data.deliveryType);
-        if (data.logoImage) setLogoImage(data.logoImage);
+        const store = data.storeConfig || {};
+        if (store.theme) setSelectedThemeId(store.theme);
+        if (store.templateIndex !== undefined) setTemplateIndex(store.templateIndex);
+        if (store.headline) setStoreHeadline(store.headline);
+        if (store.phone) setPhoneContact(store.phone);
+        if (store.deliveryType) setDeliveryType(store.deliveryType);
+        if (store.logo) setLogoImage(store.logo);
+        if (store.domain) setCustomDomain(store.domain);
+        if (store.seoTitle) setSeoTitle(store.seoTitle);
+        if (store.isOnline !== undefined) setIsStoreOnline(store.isOnline);
       }
       setLoading(false);
     }, (err) => {
@@ -76,19 +91,26 @@ export default function StorefrontView({ tenantId, industryId, onAddLog }: Store
 
   // Apply Changes with full save to Firestore
   const handleApplyThemeSettings = async () => {
+    if (!tenantId) return;
     setIsSaving(true);
     try {
-      const activeTenant = tenantId || 'default_tenant';
-      await setDoc(doc(db, 'tenants', activeTenant), {
-        storeTheme: selectedThemeId,
-        storeHeadline,
-        phoneContact,
-        deliveryType,
-        logoImage
+      await setDoc(doc(db, 'merchants', tenantId), {
+        storeConfig: {
+          theme: selectedThemeId,
+          templateIndex,
+          headline: storeHeadline,
+          phone: phoneContact,
+          deliveryType,
+          logo: logoImage,
+          domain: customDomain,
+          seoTitle: seoTitle,
+          isOnline: isStoreOnline,
+          updatedAt: new Date().toISOString()
+        }
       }, { merge: true });
 
       if (onAddLog) {
-        onAddLog('AI视觉主编', '🏪', `一键应用了网店最新视觉系统【${selectedThemeId.toUpperCase()}】，全量推流并刷新了CDN前向静态节点。`, 'success');
+        onAddLog('AI视觉主编', '🏪', `一键应用了网店最新视觉系统【${selectedThemeId.toUpperCase()}】，域名绑定：${customDomain || '默认'}，全量推流并刷新了CDN。`, 'success');
       }
     } catch (err: any) {
       console.error("Failed to save style theme to DB: ", err);
@@ -107,8 +129,40 @@ export default function StorefrontView({ tenantId, industryId, onAddLog }: Store
         <div className="bg-[#09090B] border border-[#2F3336] p-5 rounded-xl space-y-4">
           <div>
             <h3 className="text-white text-xs font-mono uppercase tracking-wider flex items-center gap-1.5">
+              <Layout className="w-4 h-4 text-emerald-400" />
+              <span>高级前端布局选择 (Premium Layout Templates)</span>
+            </h3>
+            <p className="text-[10px] text-zinc-500 mt-1">选择最适合您行业的专业排版布局，每一套都经过深度视觉优化</p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+            {(INDUSTRY_TEMPLATES[industryId]?.templates || []).map((t, idx) => (
+              <div
+                key={t.id}
+                onClick={() => setTemplateIndex(idx)}
+                className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col gap-2 relative overflow-hidden ${
+                  templateIndex === idx 
+                    ? 'bg-zinc-950 border-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.1)]' 
+                    : 'bg-black/60 border-zinc-900 text-neutral-400 hover:border-zinc-700 hover:text-white'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] font-bold font-mono tracking-tight">{t.name}</span>
+                  {templateIndex === idx && <Check className="w-3 h-3 text-emerald-400" />}
+                </div>
+                <div className="h-12 bg-zinc-900/50 rounded flex items-center justify-center border border-zinc-800/50">
+                   <Layout className="w-4 h-4 opacity-20" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-[#09090B] border border-[#2F3336] p-5 rounded-xl space-y-4">
+          <div>
+            <h3 className="text-white text-xs font-mono uppercase tracking-wider flex items-center gap-1.5">
               <Palette className="w-4 h-4 text-[#1D9BF0]" />
-              <span>智能品牌视觉管理器 (Brand Theme & Settings Studio)</span>
+              <span>品牌色彩预设 (Brand Color Presets)</span>
             </h3>
             <p className="text-[10px] text-zinc-500 mt-1">设置前台在线商城的视觉主题色块、排印格式及核心营业参数</p>
           </div>
@@ -182,17 +236,64 @@ export default function StorefrontView({ tenantId, industryId, onAddLog }: Store
               />
             </div>
 
-            <div className="sm:col-span-2 space-y-2">
-              <label className="text-[9px] text-zinc-400 block font-mono">默认支持履约结账模式 (Distribution Settings)</label>
-              <div className="grid grid-cols-3 gap-2.5">
+            <div className="sm:col-span-2 space-y-3">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block font-mono">
+                店铺高级配置
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <span className="text-[9px] text-zinc-400 font-bold flex items-center gap-1">
+                    <Globe className="w-3 h-3" /> 自定义域名
+                  </span>
+                  <input
+                    type="text"
+                    value={customDomain}
+                    onChange={(e) => setCustomDomain(e.target.value)}
+                    placeholder="shop.example.com"
+                    className="w-full bg-zinc-950 border border-zinc-900 rounded-lg py-1.5 px-3 text-[11px] text-white focus:border-[#1D9BF0] outline-none"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-[9px] text-zinc-400 font-bold flex items-center gap-1">
+                    <Sliders className="w-3 h-3" /> SEO 标题
+                  </span>
+                  <input
+                    type="text"
+                    value={seoTitle}
+                    onChange={(e) => setSeoTitle(e.target.value)}
+                    placeholder="搜索引擎展示标题"
+                    className="w-full bg-zinc-950 border border-zinc-900 rounded-lg py-1.5 px-3 text-[11px] text-white focus:border-[#1D9BF0] outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-900 rounded-lg mt-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isStoreOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-rose-500'}`} />
+                  <span className="text-[10px] font-bold text-zinc-300">网店运营状态</span>
+                </div>
+                <button
+                  onClick={() => setIsStoreOnline(!isStoreOnline)}
+                  className={`px-3 py-1 rounded-full text-[9px] font-bold transition-all ${
+                    isStoreOnline ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30' : 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
+                  }`}
+                >
+                  {isStoreOnline ? '营业中 (ONLINE)' : '歇业中 (OFFLINE)'}
+                </button>
+              </div>
+            </div>
+
+            <div className="sm:col-span-2 space-y-2.5">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block font-mono">
+                服务与履约 (Service Mode)
+              </label>
+              <div className="flex flex-wrap gap-2">
                 {(['takeout', 'delivery', 'dine_in'] as const).map((mode) => (
                   <button
                     key={mode}
-                    type="button"
                     onClick={() => setDeliveryType(mode)}
-                    className={`py-2 text-[10px] rounded-lg border font-mono transition-all text-center ${
-                      deliveryType === mode 
-                        ? 'bg-white text-black border-white font-extrabold' 
+                    className={`px-4 py-1.5 rounded-lg border text-[10.5px] font-bold transition-all duration-200 cursor-pointer ${
+                      deliveryType === mode
+                        ? 'bg-[#1D9BF0]/15 border-[#1D9BF0] text-white shadow-lg shadow-blue-500/5'
                         : 'bg-transparent text-zinc-400 border-zinc-900 hover:text-white'
                     }`}
                   >

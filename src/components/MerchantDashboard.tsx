@@ -5,7 +5,7 @@ import {
   CheckCircle, ArrowLeft, TrendingUp, AlertCircle, Sparkles, Terminal, ShieldAlert,
   Sliders, Cpu, Globe, Database, Key, RefreshCw, Layers, Activity, Server, Save, 
   ChevronDown, BookOpen, Package, Eye, LayoutGrid, Award, MessageSquare, LineChart, Settings, PlayCircle,
-  Mic, Image, Volume2, X, Upload, FileImage, Check, Copy, ChevronRight, Search, Plus,
+  Mic, Image, Volume2, X, Upload, FileImage, Check, Copy, ChevronRight, Search, Plus, Trash2,
   Cloud, CloudUpload, CloudDownload, Briefcase, CreditCard, History, Landmark
 } from 'lucide-react';
 import {
@@ -23,7 +23,7 @@ import {
 } from 'recharts';
 import { IndustryData, OperatingStrategy, TeamMember, TaskLog, ChatMessage } from '../types';
 import { MOCK_LOGS_POOL } from '../data';
-import { db, auth, handleFirestoreError, OperationType, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, getDocs } from '../services/firebase';
+import { db, auth, handleFirestoreError, OperationType, collection, doc, setDoc, getDoc, deleteDoc, onSnapshot, getDocs, updateDoc, serverTimestamp, where, addDoc, increment } from '../services/firebase';
 import DiscountsView from './DiscountsView';
 import ContentView from './ContentView';
 import ChannelsView from './ChannelsView';
@@ -33,7 +33,35 @@ import DeveloperConsoleView from './DeveloperConsoleView';
 import PaymentGatewayView from '../modules/payment/PaymentGatewayView';
 import FinanceHubView from '../modules/finance/FinanceHubView';
 import RoleManagementPanel from './RoleManagementPanel';
+import AriaFashionStudio from './AriaFashionStudio';
+import ECCAgentConsole from './ECCAgentConsole';
+import MarkItDownHub from './MarkItDownHub';
+import LangGraphCanvas from './LangGraphCanvas';
+import HyperMemEngine from './HyperMemEngine';
+import LangChainValidator from './LangChainValidator';
+import BillingSubscriptionPanel from './BillingSubscriptionPanel';
+import MerchantWorkbench from './merchant/MerchantWorkbench';
+import { 
+  DEFAULT_CATEGORIES, 
+  DEFAULT_SUPPLIERS, 
+  DEFAULT_PURCHASE_ORDERS, 
+  DEFAULT_DRAFT_ORDERS, 
+  DEFAULT_COUPONS, 
+  DEFAULT_CUSTOMER_TAGS, 
+  DEFAULT_SKU_VARIANTS, 
+  DEFAULT_B2B_CUSTOMERS, 
+  MEMBER_AVATARS,
+  getIndustryDefaultProducts 
+} from '../data/merchant-mocks';
+import { 
+  getManagers, 
+  getIndustryDefaultHeadline, 
+  SlsTooltip, 
+  ChnTooltip,
+  Manager 
+} from '../utils/merchant-helpers';
 import { UserRole } from '../services/rbac';
+import { PermissionGuard } from './PermissionGuard';
 import { 
   writeBatch,
   query
@@ -49,241 +77,9 @@ interface MerchantDashboardProps {
   onNavigate?: (action: any) => void;
 }
 
-interface Manager {
-  roleId: string;
-  role: string;
-  emoji: string;
-  name: string;
-  desc: string;
-  welcome: string;
-  specialty: string;
-}
+// Removed getManagers, Tooltips, getIndustryDefaultHeadline (moved to merchant-helpers.tsx)
 
-// 4 distinct managers mapping exactly to tabs
-const getManagers = (industryId: string): Manager[] => {
-  if (industryId === 'catering') {
-    return [
-      {
-        roleId: 'designer',
-        role: 'AI设计师',
-        emoji: '🍽️',
-        name: '视觉陈列师 Kai',
-        desc: '负责门脸品牌设计、线上美团/点评菜单视觉编排和一句话生成高还原度海报。主要负责：店铺 70%、产品 30%。',
-        welcome: '我是您的 AI设计师Kai。我负责店铺首页设计、Banner海报排布、视觉美化与一站式宣传图生成。主要对接「店铺页面」！',
-        specialty: '海报设计及排版、线上菜单视觉呈现、品牌形象VI'
-      },
-      {
-        roleId: 'product_mgr',
-        role: 'AI商品经理',
-        emoji: '🍜',
-        name: '菜品研发官 Ren',
-        desc: '负责菜品新品开发、外卖菜单打样、物料扣率精算与零售定价。主要负责：产品 100%。',
-        welcome: '我是您的 AI商品经理Ren。我负责菜品新品研发、SKU属性与录单维护、毛利与采购成本定价。主要对接「产品页面」！',
-        specialty: '新品概念配置、零售菜谱溢价评估、采购供应链核算'
-      },
-      {
-        roleId: 'ops_mgr',
-        role: 'AI运营经理',
-        emoji: '📈',
-        name: '门店运营官 Lulu',
-        desc: '负责线上接单调度、即时客诉与秒级异常退款拦截、资金合规对账。主要负责：订单、客户与销量/财务分析。',
-        welcome: '我是您的 AI运营经理Lulu。我负责全网订单接单调度、客诉拦截与退款处理、进销存异常告警及每晚财务结账复盘。主要对接「订单、客户、分析」页面！',
-        specialty: '极客订单履约、多退款拦截安抚、流水一键审计'
-      },
-      {
-        roleId: 'marketing_mgr',
-        role: 'AI营销经理',
-        emoji: '📣',
-        name: '餐饮营销官 Soren',
-        desc: '精算营销代金券、霸王餐引流案、探店KOL宣发文案内容撰写。主要负责：营销 100%。',
-        welcome: '我是您的 AI营销经理Soren。我负责全网引流活动策划、满减代金券计算投放、探店KOL宣发文案。主要对接「营销页面」！',
-        specialty: '满减精算折扣、活动策划与KOL内容、美团大众推广投放'
-      }
-    ];
-  } else if (industryId === 'retail') {
-    return [
-      {
-        roleId: 'designer',
-        role: 'AI设计师',
-        emoji: '🏪',
-        name: '店铺设计师 Dax',
-        desc: '负责百货门脸平面设计、网店视觉海报排布和橱窗创意陈列。主要负责：店铺 70%、产品 30%。',
-        welcome: '我是您的 AI设计师Dax。我负责百货门脸平面设计、网站Banner排版、橱窗视觉呈现创意渲染。主要对接「店铺页面」！',
-        specialty: '线上橱窗陈列、配色方案制定、店头氛围美化二创'
-      },
-      {
-        roleId: 'product_mgr',
-        role: 'AI商品经理',
-        emoji: '📦',
-        name: '选品好手 Barton',
-        desc: '精研新型百货分类、新品SPU自动建档、毛利预算核定与零售溢价。主要负责：产品 100%。',
-        welcome: '我是您的 AI商品经理Barton。我负责百货商品开发与科学选品定价、SKU多规格管理、上架SPU录单、进销存监控。主要对接「产品页面」！',
-        specialty: '百货新品研发、快反库存配比、商品录单与价格打法'
-      },
-      {
-        roleId: 'ops_mgr',
-        role: 'AI运营经理',
-        emoji: '📈',
-        name: '运营专家 Cyrus',
-        desc: '主导网店订单发货、顺丰快递官方揽收通知对接、精细CRM客户关怀与销量财务报表。主要负责：订单、客户与销量/财务分析。',
-        welcome: '我是您的 AI运营经理Cyrus。我负责百货业务日常订单履约、客诉退款拦截、分销跟单与每日资金大盘审计。主要对接「订单、客户、分析」页面！',
-        specialty: '订单极速下发发货、客诉秒级关怀拦截、分销渠道数据结转'
-      },
-      {
-        roleId: 'marketing_mgr',
-        role: 'AI营销经理',
-        emoji: '📣',
-        name: '营销专家 Nova',
-        desc: '撰写社媒裂变推介内容、大促销优惠券发放方案、及流量直通车竞价调优。主要负责：营销 100%。',
-        welcome: '我是您的 AI营销经理Nova。我负责线上大促优惠券配置、小红书/微群文案创意输出、直通车精准预算调优。主要对接「营销页面」！',
-        specialty: '精敏直通车调价竞价、大促满减券派发策略、品牌曝光推播策划'
-      }
-    ];
-  } else {
-    // Default: 'fashion' 服装公司
-    return [
-      {
-        roleId: 'designer',
-        role: 'AI设计师',
-        emoji: '👗',
-        name: '时装设计师 Aria',
-        desc: '负责服装线上装修、版图搭配、微店页面整体视觉设计与UI风格排布。配置比例：店铺 70%、产品 30%。',
-        welcome: '我是您的 AI设计师 Aria。我负责服装页面的视觉陈列、首页海报视觉设计、详情页穿搭排版。主要精力负责「店铺页面」与部分「产品详情」！',
-        specialty: '线上橱窗陈列、配色方案制定、海报视觉设计渲染'
-      },
-      {
-        roleId: 'product_mgr',
-        role: 'AI商品经理',
-        emoji: '👚',
-        name: '选品好手 Barton',
-        desc: '负责服装面料比对、潮流选品、极速快反打样排单与价格核定。配置比例：产品 100%。',
-        welcome: '我是您的 AI商品经理 Barton。我负责服装商品研发选品、规格多SKU/SPU建档上架及毛利定价。全权负责「产品页面」！',
-        specialty: '潮流热词选款、快反打样物耗、服装溢价与毛利率策略'
-      },
-      {
-        roleId: 'ops_mgr',
-        role: 'AI运营经理',
-        emoji: '📈',
-        name: '跟单专家 Cyrus',
-        desc: '负责分销渠道、SPU库存红线监控、一站式发往顺丰极速托揽与日常退款纠纷。配置比例：订单、客户、分析页面。',
-        welcome: '我是您的 AI运营经理 Cyrus。我负责订单一件代发托管、顺丰揽件打单、客户CRM退换退款拦截、资金损益对账。全权管控「订单、客户、分析」页面！',
-        specialty: '订单托管揽件、顺丰一件代发对接、每日资金结算周报'
-      },
-      {
-        roleId: 'marketing_mgr',
-        role: 'AI营销经理',
-        emoji: '📣',
-        name: '宣发大咖 Daphne',
-        desc: '主导活动策划、全网优惠代金券发放、投放广告ROI精细化调优及博主寄样。配置比例：营销 100%。',
-        welcome: '我是您的 AI营销经理 Daphne。我负责活动策划、优惠代金券发放、推广ROI调优与小红书等社媒带货文案输出。全权对接「营销页面」！',
-        specialty: '小红书潮流穿搭种草文案、抖音短视起拍脚本、千万粉博主派样'
-      }
-    ];
-  }
-};
-
-/*
-};��主拼单寄样投放策划。',
-        welcome: '我是您的 AI营销经理。我负责营销活动、优惠券、广告推广、小红书社媒文案输出。',
-        specialty: '社交穿搭种草内容运营、首发让利优惠精排、直通车出资投放'
-      }
-    ];
-  }
-};�经理。我负责活动策划、广告推广和内容营销。',
-        specialty: 'ROI千人千面精准引流、营销投放预算细调、带货推介脚本撰写'
-      }
-    ];
-  }
-
-};��出价千人千面推广文案创作。',
-        welcome: '我是您的 AI营销经理。我负责活动策划、广告推广和内容营销。',
-        specialty: '首发让利测品、优惠代金券精排、抖音挂车引流脚本'
-      }
-    ];
-  } else {
-    // Default: 'fashion' 服装公司
-    return [
-      {
-        roleId: 'store_mgr',
-        role: 'AI开店经理',
-        emoji: '🏪',
-        name: '装潢设计师 Aria',
-        desc: '负责线上店铺装修、版图搭配、微店页面整体视觉设计与网页排版。',
-        welcome: '我是您的 AI开店经理。我负责店铺装修、页面设计和一句话生成网站。',
-        specialty: '线上橱窗陈列、配色方案制定、一句话渲染店头氛围'
-      },
-      {
-        roleId: 'product_mgr',
-        role: 'AI商品经理',
-        emoji: '👗',
-        name: '选品好手 Barton',
-        desc: '负责服装面料比对、潮流选品、极速快反打样排单与定价建议。',
-        welcome: '我是您的 AI商品经理。我负责服装选品、商品上架、商品图片和定价建议。',
-        specialty: '潮流热词选款、快反柔选比例、上架SPU建档与毛利定价'
-      },
-      {
-        roleId: 'ops_mgr',
-        role: 'AI运营经理',
-        emoji: '📈',
-        name: '跟单专家 Cyrus',
-        desc: '负责分销渠道维护、SPU库存红线监控、一站式订单极速托管发货。',
-        welcome: '我是您的 AI运营经理。我负责订单处理、库存建议和经营分析。',
-        specialty: '订单托管揽件、顺丰一件代发对接、每日资金结算周报'
-      },
-      {
-        roleId: 'marketing_mgr',
-        role: 'AI营销经理',
-        emoji: '📣',
-        name: '宣发大咖 Daphne',
-        desc: '负责撰写小红书穿搭种草内容、抖音探店脚本与建立博主拼单寄样。',
-        welcome: '我是您的 AI营销经理。我负责活动策划、广告推广和内容营销。',
-        specialty: '小红书潮流穿搭种草文案、抖音短视起拍脚本、千万粉博主派样'
-      }
-    ];
-  }
-};
-*/
-
-const SlsTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#09090B] border border-[#2F3336] p-3 rounded-lg shadow-xl font-mono text-xs text-neutral-200">
-        <p className="font-bold mb-1 text-white">{label}</p>
-        <p className="text-sky-400">
-          销售额: <span className="font-bold">¥{Number(payload[0].value).toFixed(2)}</span>
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
-const ChnTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="bg-[#09090B] border border-[#2F3336] p-3 rounded-lg shadow-xl font-mono text-xs text-neutral-200">
-        <p className="font-bold mb-1 text-white">{label}</p>
-        <p className="text-indigo-400">
-          获客比率: <span className="font-bold">{payload[0].value}%</span>
-        </p>
-      </div>
-    );
-  }
-  return null;
-};
-
-const getIndustryDefaultHeadline = (indId: string) => {
-  const defaults: Record<string, string> = {
-    fashion: '👗 Aria 季风高定系列 · 舒感美学新风尚',
-    catering: '☕ Tyson Cafe · 经典美式/手作拿铁特惠',
-    retail: '✈️ 全球尖货精选直邮 · 发现品质生活好物',
-    beauty: '💄 Coco Salon · 焕活平衡 SPA 与定制深层理疗',
-    fitness: '🏋️ Kelly Gym · 尊享周度私教定制与低碳膳食',
-    jewelry: '💎 18K足金古法拉丝龙凤金镯 · 匠人高定传承',
-    home: '🛋️ 空间美学 · 环保级棉麻主卧全套风格软装'
-  };
-  return defaults[indId] || defaults.catering;
-};
+// Helper functions moved to merchant-helpers.tsx
 
 export default function MerchantDashboard({ 
   industry, 
@@ -319,7 +115,37 @@ export default function MerchantDashboard({
     return 'finance' as const;
   };
 
-  const [activeMenu, setActiveMenu] = useState<'finance' | 'payment' | 'workbench' | 'store' | 'product' | 'order' | 'customer' | 'marketing' | 'analytics' | 'settings' | 'team_members' | 'app_store' | 'developer' | 'rbac'>(getInitialMenuFromUrl());
+  const [activeMenu, setActiveMenu] = useState<'finance' | 'payment' | 'workbench' | 'store' | 'product' | 'order' | 'customer' | 'marketing' | 'analytics' | 'settings' | 'team_members' | 'app_store' | 'developer' | 'rbac' | 'ai_ops'>(getInitialMenuFromUrl() as any);
+  const [merchantData, setMerchantData] = useState<any>(null);
+  const [isLoadingMerchant, setIsLoadingMerchant] = useState(true);
+
+  // Load real merchant data from Firestore
+  useEffect(() => {
+    const loadMerchant = async () => {
+      if (!db || !auth.currentUser) return;
+      try {
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data() as any;
+          if (userData && userData.merchantId) {
+            const mId = userData.merchantId;
+            const mDoc = await getDoc(doc(db, 'merchants', mId));
+            if (mDoc.exists()) {
+              const data = mDoc.data() as any;
+              setMerchantData(data);
+              // Sync settings if they exist
+              if (data.settings?.apiProvider) setApiProvider(data.settings.apiProvider);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load merchant:", e);
+      } finally {
+        setIsLoadingMerchant(false);
+      }
+    };
+    loadMerchant();
+  }, []);
 
   // Synchronize URL and listen to back/forward navigation
   useEffect(() => {
@@ -381,6 +207,13 @@ export default function MerchantDashboard({
   const [isTyping, setIsTyping] = useState(false);
   const [activeTab, setActiveTab] = useState<'stream' | 'tasks'>('stream');
   
+  // Aria Fashion Studio states
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
+  const [autoStep, setAutoStep] = useState(0);
+  const [isAriaGenerating, setIsAriaGenerating] = useState(false);
+  const [ariaGenerationResult, setAriaGenerationResult] = useState<string | null>(null);
+  const [ariaTab, setAriaTab] = useState<'trend' | 'design' | 'prototype' | 'catalog' | 'detail' | 'brand'>('trend');
+  
   // Custom Multi-Modal states for Advanced AI Control Console
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedImageName, setAttachedImageName] = useState<string | null>(null);
@@ -427,12 +260,72 @@ export default function MerchantDashboard({
   const [geminiConnected, setGeminiConnected] = useState<'online' | 'local'>('local');
 
   // Sub-navigation state selectors for secondary-level dashboard tabs
-  const [storeSubTab, setStoreSubTab] = useState<'overview' | 'decoration' | 'channels' | 'domain' | 'brand' | 'seo'>('overview');
+  const [storeSubTab, setStoreSubTab] = useState<'overview' | 'decoration' | 'channels' | 'domain' | 'brand' | 'seo' | 'decoration_legacy' | 'aria'>('overview');
   const [productSubTab, setProductSubTab] = useState<'list' | 'categories' | 'inventory' | 'sku' | 'suppliers' | 'purchase'>('list');
   const [orderSubTab, setOrderSubTab] = useState<'all' | 'draft' | 'refund' | 'aftersales' | 'tracking'>('all');
   const [customerSubTab, setCustomerSubTab] = useState<'list' | 'tags' | 'segments' | 'membership' | 'b2b'>('list');
-  const [marketingSubTab, setMarketingSubTab] = useState<'coupon' | 'campaign' | 'email' | 'sms' | 'ai'>('coupon');
+  const [marketingSubTab, setMarketingSubTab] = useState<'coupon' | 'campaign' | 'email' | 'sms' | 'ai' | 'markitdown'>('coupon');
+  const [aiOpsSubTab, setAiOpsSubTab] = useState<'ecc' | 'langgraph' | 'hypermem' | 'validator'>('ecc');
   const [analyticsSubTab, setAnalyticsSubTab] = useState<'sales' | 'customer' | 'product' | 'marketing' | 'realtime'>('sales');
+  const [teamSubTab, setTeamSubTab] = useState<'ai' | 'human'>('ai');
+
+  // Human Team Management State
+  const [humanMembers, setHumanMembers] = useState<any[]>([]);
+  const [isAddingMember, setIsAddingMember] = useState(false);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<'founder' | 'admin' | 'manager' | 'staff' | 'customer'>('staff');
+
+  // Load human members from Firestore
+  useEffect(() => {
+    if (activeMenu === 'team_members' && merchantData?.id) {
+      const q = query(collection(db, 'merchant_members'), where('merchantId', '==', merchantData.id));
+      const unsub = onSnapshot(q, (snap) => {
+        const members = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setHumanMembers(members);
+      });
+      return () => unsub();
+    }
+  }, [activeMenu, merchantData?.id]);
+
+  const handleAddMember = async () => {
+    if (!newMemberEmail || !merchantData?.id) return;
+    try {
+      await addDoc(collection(db, 'merchant_members'), {
+        merchantId: merchantData.id,
+        email: newMemberEmail,
+        role: newMemberRole,
+        status: 'active',
+        invitedAt: serverTimestamp()
+      });
+      setNewMemberEmail('');
+      setIsAddingMember(false);
+      
+      // Log audit
+      await addDoc(collection(db, `merchants/${merchantData.id}/audit_logs`), {
+        action: 'add_member',
+        target: newMemberEmail,
+        role: newMemberRole,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Failed to add member:", e);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, email: string) => {
+    if (!merchantData?.id) return;
+    try {
+      await deleteDoc(doc(db, 'merchant_members', memberId));
+      // Log audit
+      await addDoc(collection(db, `merchants/${merchantData.id}/audit_logs`), {
+        action: 'remove_member',
+        target: email,
+        timestamp: serverTimestamp()
+      });
+    } catch (e) {
+      console.error("Failed to remove member:", e);
+    }
+  };
 
   // Extra sub-navigation database fields for store overview and other parameters
   const [isStoreOnline, setIsStoreOnline] = useState(true);
@@ -513,6 +406,29 @@ export default function MerchantDashboard({
   
   // 2. Product selection mock state
   const [productsList, setProductsList] = useState<any[]>([]);
+  const [isProductsLoading, setIsProductsLoading] = useState(true);
+
+  // Load real products from Firestore
+  const fetchProducts = async () => {
+    if (!db || !merchantData?.id) return;
+    setIsProductsLoading(true);
+    try {
+      const q = query(collection(db, 'products'), where('merchantId', '==', merchantData.id));
+      const querySnapshot = await getDocs(q);
+      const products = querySnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+      setProductsList(products);
+    } catch (e) {
+      console.error("Failed to load products:", e);
+    } finally {
+      setIsProductsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMenu === 'product' && merchantData?.id) {
+      fetchProducts();
+    }
+  }, [activeMenu, merchantData?.id]);
   const [newProductInput, setNewProductInput] = useState('');
   const [newProductPriceInput, setNewProductPriceInput] = useState('');
   const [isDevelopingProduct, setIsDevelopingProduct] = useState(false);
@@ -773,10 +689,36 @@ export default function MerchantDashboard({
   // Helper to save Merchant profile configs to DB (Merchant Settings)
   const handleSaveMerchantProfile = async (newBrandName: string, newSlogan: string) => {
     try {
+      // 1. Update Firestore
       await setDoc(doc(db, 'tenants', tenantId), {
         merchantName: newBrandName,
         companySlogan: newSlogan
       }, { merge: true });
+
+      // 2. Sync to Backend ModaDB (Enterprise Grade Sync)
+      try {
+        await fetch(`/api/merchants/${tenantId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}`
+          },
+          body: JSON.stringify({
+            merchantName: newBrandName,
+            slogan: newSlogan
+          })
+        });
+      } catch (syncErr) {
+        console.warn("Backend sync failed, but Firestore updated:", syncErr);
+      }
+
+      // 3. Log audit
+      await addDoc(collection(db, 'tenants', tenantId, 'audit_logs'), {
+        action: 'update_profile',
+        newBrandName,
+        newSlogan,
+        timestamp: serverTimestamp()
+      });
       
       setLogs(prev => [
         {
@@ -794,6 +736,36 @@ export default function MerchantDashboard({
     }
   };
 
+  const triggerAvatarGeneration = (member: any) => {
+    const timestamp = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    setLogs((prev: any) => [
+      {
+        id: Math.random().toString(),
+        timestamp,
+        sender: 'AI 形象引擎',
+        emoji: '🎭',
+        message: `⚡ [Flux-1 • 渲染中] 正在为「${member.name}」重构数字形象，匹配度优化中...`,
+        type: 'info'
+      },
+      ...prev
+    ]);
+    
+    // Simulate generation completion
+    setTimeout(() => {
+      setLogs((prev: any) => [
+        {
+          id: Math.random().toString(),
+          timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+          sender: 'AI 形象引擎',
+          emoji: '✨',
+          message: `✔ [Flux-1 • 完成] 「${member.name}」的数字形象已刷新并同步至全域分发中心。`,
+          type: 'success'
+        },
+        ...prev
+      ]);
+    }, 2000);
+  };
+
   // Helper to perform computing power topup or SaaS package upgrade in Firestore
   const handlePerformSaaSTopup = async (topupType: 'token_pack' | 'tier_upgrade', amount: number, tokensCredited: number, itemName: string) => {
     try {
@@ -808,6 +780,16 @@ export default function MerchantDashboard({
         billingTier: nextTier,
         status: 'active' // automatically reactivate if suspended or expired!
       }, { merge: true });
+
+      // 1.5 Log audit
+      await addDoc(collection(db, `merchants/${merchantData?.id}/audit_logs`), {
+        action: 'billing_topup',
+        topupType,
+        amount,
+        tokensCredited,
+        itemName,
+        timestamp: serverTimestamp()
+      });
 
       // 2. Insert new transaction invoice document to subcollection
       const invoiceId = `INV-${Date.now().toString().slice(-6)}`;
@@ -845,7 +827,7 @@ export default function MerchantDashboard({
       const metricsRef = doc(db, 'tenants', tenantId, 'industries', industry.id, 'metrics', 'operating');
       const snap = await getDoc(metricsRef);
       if (snap.exists()) {
-        const currentData = snap.data();
+        const currentData = snap.data() as any;
         await setDoc(metricsRef, {
           sales: Number(((currentData.sales || 0) + addedSales).toFixed(2)),
           orders: (currentData.orders || 0) + addedOrders
@@ -886,6 +868,7 @@ export default function MerchantDashboard({
     price: number;
     location: string;
     customerName: string;
+    time?: string;
   } | null>(null);
 
   // Advanced ordering app details state
@@ -919,7 +902,7 @@ export default function MerchantDashboard({
       const name = type === 'takeout' ? usernames[Math.floor(Math.random() * usernames.length)] : (tables[Math.floor(Math.random() * tables.length)] + '顾客');
       const phone = type === 'takeout' ? '158****' + Math.floor(Math.random() * 8999 + 1000) : '堂食自助';
 
-      const simulatedOrder = {
+      const simulatedOrder: any = {
         id: orderId,
         time: '刚才',
         location: selectedLocation,
@@ -935,6 +918,11 @@ export default function MerchantDashboard({
       setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'orders', orderId), simulatedOrder)
         .catch(err => handleFirestoreError(err, OperationType.WRITE, `tenants/${tenantId}/industries/${industry.id}/orders/${orderId}`));
       
+      // Decrease inventory for simulated order
+      updateDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'products', item.id), {
+        stock: increment(-quantity)
+      }).catch(err => console.warn("Simulated inventory decrease failed:", err));
+
       updateMetricsInDb(item.price * quantity, 1);
 
       setLogs(prev => [
@@ -950,7 +938,15 @@ export default function MerchantDashboard({
       ]);
 
       // Trigger tone notification chime and set state alert so it displays elegantly
-      setIncomingOrderAlert(simulatedOrder);
+      setIncomingOrderAlert({
+        id: orderId,
+        time: '刚才',
+        location: selectedLocation,
+        desc: `${item.name} x${quantity}`,
+        price: item.price * quantity,
+        type: type as 'takeout' | 'dine_in',
+        customerName: name
+      });
       playLiveOrderChime();
 
     }, 20000); // Trigger order simulation every 20 seconds
@@ -2508,6 +2504,9 @@ const handleRestoreFromDrive = async () => {
               { id: 'customer', label: '客户', desc: '客户服务', emoji: '👥', icon: Users },
               { id: 'marketing', label: '营销', desc: '营销推广', emoji: '📣', icon: Sparkles },
               { id: 'analytics', label: '分析', desc: '数据统计', emoji: '📊', icon: LineChart },
+              { id: 'payment', label: '支付', desc: '结算中枢', emoji: '💳', icon: CreditCard },
+              { id: 'finance', label: '金融', desc: '资产钱包', emoji: '🏦', icon: Landmark },
+              { id: 'ai_ops', label: '智体枢纽', desc: '任务控制', emoji: '🧠', icon: Cpu },
               { id: 'app_store', label: 'App Store', desc: '功能扩展', emoji: '🔌', icon: Layers },
               { id: 'developer', label: '开发者中心', desc: '接口配置', emoji: '💻', icon: Key },
               { id: 'team_members', label: '团队成员', desc: '专家头像', emoji: '🤖', icon: Award },
@@ -2646,7 +2645,9 @@ const handleRestoreFromDrive = async () => {
                 case 'store':
                   return [
                     { id: 'overview', name: '店铺概览', emoji: '🏢' },
-                    { id: 'decoration', name: '店铺装修', emoji: '🎨' },
+                    { id: 'decoration', name: 'AI装修', emoji: '🎨' },
+                    { id: 'aria', name: 'Aria 设计室', emoji: '👗' },
+                    { id: 'decoration_legacy', name: '基础装修', emoji: '🧱' },
                     { id: 'channels', name: '渠道接收', emoji: '🔌' },
                     { id: 'domain', name: '域名设置', emoji: '🌐' },
                     { id: 'brand', name: '品牌设置', emoji: '✨' },
@@ -2681,9 +2682,10 @@ const handleRestoreFromDrive = async () => {
                   return [
                     { id: 'coupon', name: '优惠券', emoji: '🎫' },
                     { id: 'campaign', name: '活动中心', emoji: '🎡' },
+                    { id: 'ai', name: 'AI营销', emoji: '🤖' },
+                    { id: 'markitdown', name: '内容中心', emoji: '📝' },
                     { id: 'email', name: '邮件营销', emoji: '✉' },
-                    { id: 'sms', name: '短信营销', emoji: '💬' },
-                    { id: 'ai', name: 'AI营销', emoji: '🤖' }
+                    { id: 'sms', name: '短信营销', emoji: '💬' }
                   ];
                 case 'analytics':
                   return [
@@ -2756,157 +2758,15 @@ const handleRestoreFromDrive = async () => {
               
               {/* VIEW 1: WORKBENCH (📊 工作台) */}
               {activeMenu === 'workbench' && (
-                <div className="space-y-6">
-                  {/* Grid cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-[#09090B] border border-[#2F3336] p-4 rounded-xl flex flex-col justify-between h-28 text-left animate-fadeIn">
-                      <p className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider">今日累计收入</p>
-                      <span className="text-lg font-bold font-mono tracking-tight text-white mt-1">
-                        ¥ {sales.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                      <span className="text-[9px] text-sky-400 font-mono mt-auto flex items-center space-x-1">
-                        <TrendingUp className="w-2.5 h-2.5" />
-                        <span>自动增加28%</span>
-                      </span>
-                    </div>
-
-                    <div className="bg-[#09090B] border border-[#2F3336] p-4 rounded-xl flex flex-col justify-between h-28 text-left animate-fadeIn">
-                      <p className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider">成单数量</p>
-                      <span className="text-lg font-bold font-mono tracking-tight text-white mt-1">{orders} 笔</span>
-                      <span className="text-[9px] text-[#8B949E] font-mono mt-auto">处理完毕</span>
-                    </div>
-
-                    <div className="bg-[#09090B] border border-[#2F3336] p-4 rounded-xl flex flex-col justify-between h-28 text-left animate-fadeIn">
-                      <p className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider">数字员工</p>
-                      <span className="text-lg font-bold font-mono text-[#1D9BF0] mt-1">4位智能在岗</span>
-                      <span className="text-[9px] text-sky-400 font-mono mt-auto flex items-center space-x-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
-                        <span>持续运行</span>
-                      </span>
-                    </div>
-
-                    <div className="bg-[#09090B] border border-[#2F3336] p-4 rounded-xl flex flex-col justify-between h-28 text-left animate-fadeIn">
-                      <p className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider">节省成本</p>
-                      <span className="text-lg font-bold font-mono tracking-tight text-white mt-1">¥ 1,540 /天</span>
-                      <span className="text-[9px] text-neutral-400 font-mono mt-auto">降本增效</span>
-                    </div>
-                  </div>
-
-                  {/* Cumulative Sales SVG slope chart */}
-                  <div className="bg-[#09090B] border border-[#2F3336] p-4 rounded-xl">
-                    <div className="flex items-center justify-between mb-3 text-left">
-                      <span className="text-xs font-mono text-[#8B949E] uppercase tracking-wider">销售趋势</span>
-                      <span className="text-[9px] bg-neutral-900 border border-[#2F3336] px-2 py-0.5 rounded font-mono text-sky-400">实时更新</span>
-                    </div>
-                    {/* SVG Curve */}
-                    <div className="h-32 w-full relative">
-                      <svg className="w-full h-full" viewBox="0 0 400 100" preserveAspectRatio="none">
-                        <defs>
-                          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#1D9BF0" stopOpacity="0.4" />
-                            <stop offset="100%" stopColor="#1D9BF0" stopOpacity="0" />
-                          </linearGradient>
-                        </defs>
-                        <path 
-                          d="M0,90 Q40,65 80,72 T160,50 T240,42 T320,25 T400,10 L400,100 L0,100 Z" 
-                          fill="url(#chartGrad)" 
-                        />
-                        <path 
-                          d="M0,90 Q40,65 80,72 T160,50 T240,42 T320,25 T400,10" 
-                          fill="none" 
-                          stroke="#1D9BF0" 
-                          strokeWidth="2" 
-                        />
-                        <circle cx="80" cy="72" r="3" fill="#ffffff" />
-                        <circle cx="160" cy="50" r="3" fill="#ffffff" />
-                        <circle cx="320" cy="25" r="3" fill="#ffffff" stroke="#1D9BF0" strokeWidth="1" />
-                        <circle cx="400" cy="10" r="4" fill="#1D9BF0" className="animate-pulse" />
-                      </svg>
-                      {/* X labels */}
-                      <div className="flex justify-between text-[8px] font-mono text-[#8B949E] mt-1.5">
-                        <span>08:00</span>
-                        <span>10:00</span>
-                        <span>12:00</span>
-                        <span>14:00</span>
-                        <span>16:00</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Manual direct controls */}
-                  <div className="bg-[#09090B] border border-[#2F3336] p-4 rounded-xl space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono text-neutral-400 uppercase tracking-wider">快捷操作</span>
-                      <span className="text-[9px] text-[#8B949E]">CONTROL</span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <button 
-                        type="button"
-                        onClick={() => triggerQuickMacro('ad_boost')}
-                        className="bg-neutral-950 border border-[#2F3336] hover:border-[#1D9BF0] hover:bg-[#1D9BF0]/5 duration-200 p-3 rounded-xl text-left cursor-pointer group active:scale-95"
-                      >
-                        <span className="text-sm">📣</span>
-                        <p className="text-xs font-bold text-white mt-1 group-hover:text-sky-400">推广投放</p>
-                        <p className="text-[10px] text-[#8B949E] mt-0.5">一键推广</p>
-                      </button>
-                      
-                      <button 
-                        type="button"
-                        onClick={() => triggerQuickMacro('inventory_sync')}
-                        className="bg-neutral-950 border border-[#2F3336] hover:border-[#1D9BF0] hover:bg-[#1D9BF0]/5 duration-200 p-3 rounded-xl text-left cursor-pointer group active:scale-95"
-                      >
-                        <span className="text-sm">📦</span>
-                        <p className="text-xs font-bold text-white mt-1 group-hover:text-sky-400">货源快反</p>
-                        <p className="text-[10px] text-[#8B949E] mt-0.5">一键补货</p>
-                      </button>
-
-                      <button 
-                        type="button"
-                        onClick={() => triggerQuickMacro('audit_reconcile')}
-                        className="bg-[#09090B] border border-[#2F3336] hover:border-[#1D9BF0] hover:bg-[#1D9BF0]/5 duration-200 p-3 rounded-xl text-left cursor-pointer group active:scale-95"
-                      >
-                        <span className="text-sm">🪙</span>
-                        <p className="text-xs font-bold text-white mt-1 group-hover:text-sky-400">对账合并</p>
-                        <p className="text-[10px] text-[#8B949E] mt-0.5">自动核对</p>
-                      </button>
-
-                      <button 
-                        type="button"
-                        onClick={() => triggerQuickMacro('customer_crm')}
-                        className="bg-neutral-950 border border-[#2F3336] hover:border-[#1D9BF0] hover:bg-[#1D9BF0]/5 duration-200 p-3 rounded-xl text-left cursor-pointer group active:scale-95"
-                      >
-                        <span className="text-sm">💬</span>
-                        <p className="text-xs font-bold text-white mt-1 group-hover:text-sky-400">纠纷处理</p>
-                        <p className="text-[10px] text-[#8B949E] mt-0.5">极速安抚</p>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Logs ticker layout */}
-                  <div className="bg-[#09090B] border border-[#2F3336] rounded-xl flex flex-col h-[280px] overflow-hidden">
-                    <div className="bg-[#0d0d0f] border-b border-[#2F3336] px-4 py-2.5 flex items-center justify-between shrink-0">
-                      <span className="text-xs font-mono text-[#8B949E] uppercase tracking-wider">系统监控日志</span>
-                      <span className="text-[9px] bg-[#1D9BF0]/15 text-[#38BDF8] border border-[#1D9BF0]/20 px-2 py-0.5 rounded">ONLINE</span>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-3 space-y-2 font-mono text-[11px] bg-black text-left">
-                      {logs.slice(-30).map((log) => (
-                        <div key={log.id} className="p-2 border border-[#2F3336]/40 bg-[#070708] rounded-lg">
-                          <div className="flex justify-between items-center text-[9px] text-[#8B949E] mb-1">
-                            <span className="font-bold text-neutral-300 flex items-center space-x-1">
-                              <span>{log.emoji}</span>
-                              <span>{log.sender}</span>
-                            </span>
-                            <span>{log.timestamp}</span>
-                          </div>
-                          <p className="text-neutral-200 leading-relaxed text-[11px] pl-1.5 border-l border-[#1D9BF0]">{log.message}</p>
-                        </div>
-                      ))}
-                      <div ref={bottomLogsRef} />
-                    </div>
-                  </div>
-                </div>
+                <MerchantWorkbench 
+                  sales={sales}
+                  orders={orders}
+                  dailySalesData={getDailySalesData()}
+                  channelsData={channelsData}
+                  selectedStaff={selectedStaff}
+                  logs={logs}
+                />
               )}
-
               {/* VIEW 2: STORE装饰 (🏪 店铺) */}
               {activeMenu === 'store' && (
                 <>
@@ -3023,19 +2883,42 @@ const handleRestoreFromDrive = async () => {
                     <StorefrontView 
                       tenantId={tenantId}
                       industryId={industry.id || 'catering'}
-                      onAddLog={(sender, emoji, msg, type) => setLogs(prev => [
-                        ...prev, 
-                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender, emoji, message: msg, type }
+                      onAddLog={(msg) => setLogs((prev: any) => [
+                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender: '内容中心', emoji: '📝', message: msg, type: 'info' },
+                        ...prev
                       ])}
+                    />
+                  )}
+
+                  {storeSubTab === 'aria' && (
+                    <AriaFashionStudio 
+                      isAutoRunning={isAutoRunning}
+                      setIsAutoRunning={setIsAutoRunning}
+                      autoStep={autoStep}
+                      setAutoStep={setAutoStep}
+                      setLogs={setLogs}
+                      setTestLog={(v) => console.log(v)}
+                      setSales={setSales}
+                      setOrders={setOrders}
+                      apiProvider={apiProvider}
+                      strategy={strategy}
+                      isAriaGenerating={isAriaGenerating}
+                      setIsAriaGenerating={setIsAriaGenerating}
+                      ariaGenerationResult={ariaGenerationResult}
+                      setAriaGenerationResult={setAriaGenerationResult}
+                      ariaTab={ariaTab}
+                      setAriaTab={setAriaTab}
+                      dbProducts={productsList}
+                      onUpdateProducts={fetchProducts}
                     />
                   )}
 
                   {storeSubTab === 'channels' && (
                     <ChannelsView 
                       tenantId={tenantId}
-                      onAddLog={(sender, emoji, msg, type) => setLogs(prev => [
-                        ...prev, 
-                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender, emoji, message: msg, type }
+                      onAddLog={(msg) => setLogs((prev: any) => [
+                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender: '内容中心', emoji: '📝', message: msg, type: 'info' },
+                        ...prev
                       ])}
                     />
                   )}
@@ -4306,24 +4189,47 @@ const handleRestoreFromDrive = async () => {
                       </div>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-mono text-zinc-400 block">自定义独享域名 (Full Custom Domain)</label>
+                      <input 
+                        type="text" 
+                        value={customDomainName}
+                            onChange={(e) => setCustomDomainName(e.target.value)}
+                        placeholder="www.mybrand.com"
+                        className="w-full bg-black border border-neutral-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-[#1D9BF0] font-mono"
+                      />
+                    </div>
+
                     <button
                       type="button"
-                      onClick={() => {
-                        setDoc(doc(db, 'tenants', tenantId), { customDomainName: customDomainName }, { merge: true })
-                          .then(() => {
-                            setLogs(prev => [
-                              ...prev,
-                              {
-                                id: Math.random().toString(),
-                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                sender: '系统核心',
-                                emoji: '🌐',
-                                message: `🎯 成功更新并同步域名映射协议：目标 CNAME cdn.modaui.com 指向 ${customDomainName}.modaui.com 成功，边缘证书校验完毕。`,
-                                type: 'success'
-                              }
-                            ]);
-                            alert('域名配置更新成功，已缓存写入分布式边缘宿主数据库！');
+                      onClick={async () => {
+                        try {
+                          await setDoc(doc(db, 'tenants', tenantId), { 
+                            customDomainName: customDomainName
+                          }, { merge: true });
+
+                          // Log audit
+                          await addDoc(collection(db, `merchants/${merchantData?.id}/audit_logs`), {
+                            action: 'update_domain',
+                            customDomainName,
+                            timestamp: serverTimestamp()
                           });
+
+                          setLogs(prev => [
+                            ...prev,
+                            {
+                              id: Math.random().toString(),
+                              timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                              sender: '系统核心',
+                              emoji: '🌐',
+                              message: `🎯 成功更新并同步域名映射协议：目标 CNAME cdn.modaui.com 指向 ${customDomainName}.modaui.com 成功，边缘证书校验完毕。`,
+                              type: 'success'
+                            }
+                          ]);
+                          alert('域名配置更新成功，已缓存写入分布式边缘宿主数据库！');
+                        } catch (e) {
+                          console.error("Failed to save domain:", e);
+                        }
                       }}
                       className="bg-[#1D9BF0] hover:bg-sky-400 text-white font-bold text-xs px-4 py-2 rounded-lg transition-all cursor-pointer"
                     >
@@ -4405,25 +4311,36 @@ const handleRestoreFromDrive = async () => {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setDoc(doc(db, 'tenants', tenantId), {
-                          brandLogoText: brandLogoText,
-                          brandPrimaryColor: brandPrimaryColor
-                        }, { merge: true })
-                          .then(() => {
-                            setLogs(prev => [
-                              ...prev,
-                              {
-                                id: Math.random().toString(),
-                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                sender: '系统核心',
-                                emoji: '✨',
-                                message: `🎨 主打品牌视觉成功写入云服务器，主色调：【${brandPrimaryColor}】，前向顾客点单端网站主板配色已同步更新生效。`,
-                                type: 'success'
-                              }
-                            ]);
-                            alert('自适应主题参数同步成功，已即刻应用到顾客前台！');
+                      onClick={async () => {
+                        try {
+                          await setDoc(doc(db, 'tenants', tenantId), {
+                            brandLogoText: brandLogoText,
+                            brandPrimaryColor: brandPrimaryColor
+                          }, { merge: true });
+
+                          // Log audit
+                          await addDoc(collection(db, `merchants/${merchantData?.id}/audit_logs`), {
+                            action: 'update_brand',
+                            brandLogoText,
+                            brandPrimaryColor,
+                            timestamp: serverTimestamp()
                           });
+
+                          setLogs(prev => [
+                            ...prev,
+                            {
+                              id: Math.random().toString(),
+                              timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                              sender: '系统核心',
+                              emoji: '✨',
+                              message: `🎨 主打品牌视觉成功写入云服务器，主色调：【${brandPrimaryColor}】，前向顾客点单端网站主板配色已同步更新生效。`,
+                              type: 'success'
+                            }
+                          ]);
+                          alert('自适应主题参数同步成功，已即刻应用到顾客前台！');
+                        } catch (e) {
+                          console.error("Failed to save brand:", e);
+                        }
                       }}
                       className="bg-[#1D9BF0] hover:bg-sky-400 text-white font-bold text-xs px-4 py-2 rounded-lg transition-all cursor-pointer"
                     >
@@ -4611,6 +4528,7 @@ const handleRestoreFromDrive = async () => {
                           const newItemId = 'p' + (productsList.length + 1) + '-' + Date.now();
                           const newItem = {
                             id: newItemId,
+                            merchantId: merchantData.id,
                             name: cleanedName,
                             price: finalPrice,
                             stock: finalStock,
@@ -4619,11 +4537,13 @@ const handleRestoreFromDrive = async () => {
                             desc: '手动极速发布 SPU 商品',
                             sales: 0,
                             rating: '100%',
-                            specs: { sizes: ['标准'], labels: '手工新建' }
+                            specs: { sizes: ['标准'], labels: '手工新建' },
+                            createdAt: new Date().toISOString()
                           };
 
-                          setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'products', newItemId), newItem)
+                          setDoc(doc(db, 'products', newItemId), newItem)
                             .then(() => {
+                              setProductsList(prev => [newItem, ...prev]);
                               setLogs((prevLogs) => [
                                 ...prevLogs,
                                 {
@@ -4810,14 +4730,22 @@ const handleRestoreFromDrive = async () => {
                                           onClick={() => {
                                             if (!editingName.trim()) return;
                                             // Save to Firestore
-                                            setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'products', p.id), {
+                                            setDoc(doc(db, 'products', p.id), {
                                               ...p,
                                               name: editingName.trim(),
                                               price: editingPrice,
                                               stock: editingStock,
-                                              image: editingImage
+                                              image: editingImage,
+                                              updatedAt: new Date().toISOString()
                                             })
                                               .then(() => {
+                                                setProductsList(prev => prev.map(item => item.id === p.id ? {
+                                                  ...item,
+                                                  name: editingName.trim(),
+                                                  price: editingPrice,
+                                                  stock: editingStock,
+                                                  image: editingImage
+                                                } : item));
                                                 setLogs((prev) => [
                                                   ...prev,
                                                   {
@@ -4830,7 +4758,7 @@ const handleRestoreFromDrive = async () => {
                                                   }
                                                 ]);
                                               })
-                                              .catch(err => handleFirestoreError(err, OperationType.WRITE, `tenants/${tenantId}/industries/${industry.id}/products/${p.id}`));
+                                              .catch(err => handleFirestoreError(err, OperationType.WRITE, `products/${p.id}`));
                                             setEditingProductId(null);
                                           }}
                                           className="bg-[#1D9BF0] hover:bg-[#38BDF8] text-white px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer"
@@ -4883,8 +4811,9 @@ const handleRestoreFromDrive = async () => {
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            deleteDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'products', p.id))
+                                            deleteDoc(doc(db, 'products', p.id))
                                               .then(() => {
+                                                setProductsList(prev => prev.filter(item => item.id !== p.id));
                                                 setLogs((prev) => [
                                                   ...prev,
                                                   {
@@ -4897,7 +4826,7 @@ const handleRestoreFromDrive = async () => {
                                                   }
                                                 ]);
                                               })
-                                              .catch(err => handleFirestoreError(err, OperationType.DELETE, `tenants/${tenantId}/industries/${industry.id}/products/${p.id}`));
+                                              .catch(err => handleFirestoreError(err, OperationType.DELETE, `products/${p.id}`));
                                           }}
                                           className="text-red-500 hover:text-red-400 hover:underline cursor-pointer"
                                         >
@@ -5545,49 +5474,58 @@ const handleRestoreFromDrive = async () => {
                       <div className="grid grid-cols-2 gap-2 text-sans">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             const newId = 'SIM-TS-' + Math.floor(Math.random() * 899 + 100);
                             const tbl = 'Table-' + Math.floor(Math.random() * 20 + 1);
                             const items = ['风味蜜汁叉烧双人餐 + 手打热茶', '金牌石磨肠粉 + 乌龙柠檬茶', '金牌手工肠粉 2份'];
                             const selectedItem = items[Math.floor(Math.random() * items.length)];
                             const computedPrice = selectedItem.includes('叉烧') ? 83 : selectedItem.includes('2份') ? 36 : 33;
                             
-                            const simOrder = {
-                              id: newId,
-                              time: '刚才',
-                              location: `店内 ${tbl} 扫码下单`,
-                              desc: selectedItem,
-                              price: computedPrice,
-                              status: 'pending',
-                              type: 'dine_in',
-                              customerName: `${tbl}自助消费`,
-                              phone: '店内自助'
+                            const simOrderPayload = {
+                              orderId: newId,
+                              tenantId: tenantId,
+                              industryId: industry.id,
+                              items: [{ productId: 'sim-p1', name: selectedItem, price: computedPrice, quantity: 1 }],
+                              totalPrice: computedPrice,
+                              orderType: 'dine_in',
+                              deliveryAddress: `店内 ${tbl} 扫码下单`,
+                              status: 'pending'
                             };
 
-                            // Write sandbox dining order directly to Firestore
-                            const orderToSave = {
-                              ...simOrder,
-                              tracking: ''
-                            };
-                            setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'orders', newId), orderToSave)
-                              .catch(err => handleFirestoreError(err, OperationType.WRITE, `tenants/${tenantId}/industries/${industry.id}/orders/${newId}`));
+                            try {
+                              const res = await fetch('/api/orders', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(simOrderPayload)
+                              });
+                              const data = await res.json();
+                              if (!data.success) throw new Error(data.error);
 
-                            updateMetricsInDb(computedPrice, 1);
+                              setLogs(prev => [
+                                ...prev,
+                                {
+                                  id: Math.random().toString(),
+                                  timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                                  sender: '扫码终端',
+                                  emoji: '🍱',
+                                  message: `🔔 【扫码下单响铃】${tbl} 客户完成自主扫码，账金 ¥${computedPrice} 结算挂账。`,
+                                  type: 'success'
+                                }
+                              ]);
 
-                            setLogs(prev => [
-                              ...prev,
-                              {
-                                id: Math.random().toString(),
-                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                sender: '扫码终端',
-                                emoji: '🍱',
-                                message: `🔔 【扫码下单响铃】${tbl} 客户完成自主扫码，起锅通知已下达，账金 ¥${computedPrice} 结算挂账。`,
-                                type: 'success'
-                              }
-                            ]);
-
-                            setIncomingOrderAlert(simOrder);
-                            playLiveOrderChime();
+                              setIncomingOrderAlert({
+                                id: newId,
+                                time: '刚才',
+                                location: `店内 ${tbl} 扫码下单`,
+                                desc: selectedItem,
+                                price: computedPrice,
+                                type: 'dine_in' as 'takeout' | 'dine_in',
+                                customerName: `${tbl}自助消费`
+                              });
+                              playLiveOrderChime();
+                            } catch (err) {
+                              console.error("Simulation order failed:", err);
+                            }
                           }}
                           className="bg-amber-950/40 hover:bg-amber-900/60 transition-all text-amber-400 text-[10px] py-1.5 rounded border border-amber-800/40 font-bold cursor-pointer text-center"
                         >
@@ -5596,49 +5534,58 @@ const handleRestoreFromDrive = async () => {
 
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             const newId = 'SIM-WM-' + Math.floor(Math.random() * 899 + 100);
                             const streets = ['望京麒麟社A座', 'SOHO现代城B座', '达美中心4号楼', '三里屯soho', '国贸写字楼二期'];
                             const selectedStreet = streets[Math.floor(Math.random() * streets.length)] + ` ${Math.floor(Math.random() * 20 + 1)}层`;
                             const names = ['李先生', '郭女士', '陈大明', '高小姐', '任先生'];
                             const selectedName = names[Math.floor(Math.random() * names.length)];
                             
-                            const simOrder = {
-                              id: newId,
-                              time: '刚才',
-                              location: `送往 ${selectedStreet}`,
-                              desc: '金牌石磨手工肠粉 1份 + 风味蜜汁叉烧餐 + 柠檬茶 2杯',
-                              price: 101,
-                              status: 'pending',
-                              type: 'takeout',
-                              customerName: selectedName,
-                              phone: '186****' + Math.floor(Math.random() * 8999 + 1000)
+                            const simOrderPayload = {
+                              orderId: newId,
+                              tenantId: tenantId,
+                              industryId: industry.id,
+                              items: [{ productId: 'sim-p2', name: '外卖爆款套餐', price: 101, quantity: 1 }],
+                              totalPrice: 101,
+                              orderType: 'takeout',
+                              deliveryAddress: `送往 ${selectedStreet}`,
+                              status: 'pending'
                             };
 
-                            // Write sandbox takeout order directly to Firestore
-                            const orderToSave = {
-                              ...simOrder,
-                              tracking: ''
-                            };
-                            setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'orders', newId), orderToSave)
-                              .catch(err => handleFirestoreError(err, OperationType.WRITE, `tenants/${tenantId}/industries/${industry.id}/orders/${newId}`));
+                            try {
+                              const res = await fetch('/api/orders', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(simOrderPayload)
+                              });
+                              const data = await res.json();
+                              if (!data.success) throw new Error(data.error);
 
-                            updateMetricsInDb(101, 1);
+                              setLogs(prev => [
+                                ...prev,
+                                {
+                                  id: Math.random().toString(),
+                                  timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                                  sender: '美大网关',
+                                  emoji: '🛵',
+                                  message: `🔔 【外卖落地响】接到新订单【${newId}】，自动核对履约地址：${selectedStreet}。`,
+                                  type: 'success'
+                                }
+                              ]);
 
-                            setLogs(prev => [
-                              ...prev,
-                              {
-                                id: Math.random().toString(),
-                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                sender: '美大网关',
-                                emoji: '🛵',
-                                message: `🔔 【美团外卖落地响】接到线上外卖外送新订单【${newId}】，自动核对履约地址：${selectedStreet}。`,
-                                type: 'success'
-                              }
-                            ]);
-
-                            setIncomingOrderAlert(simOrder);
-                            playLiveOrderChime();
+                              setIncomingOrderAlert({
+                                id: newId,
+                                time: '刚才',
+                                location: `送往 ${selectedStreet}`,
+                                desc: '外卖爆款套餐',
+                                price: 101,
+                                type: 'takeout' as 'takeout' | 'dine_in',
+                                customerName: selectedName
+                              });
+                              playLiveOrderChime();
+                            } catch (err) {
+                              console.error("Simulation order failed:", err);
+                            }
                           }}
                           className="bg-blue-950/40 hover:bg-blue-900/60 transition-all text-blue-300 text-[10px] py-1.5 rounded border border-blue-800/40 font-bold cursor-pointer text-center"
                         >
@@ -5712,69 +5659,190 @@ const handleRestoreFromDrive = async () => {
                                   )}
                                 </td>
                                 <td className="p-3 text-right">
-                                  {ord.status === 'pending' ? (
-                                    <div className="flex justify-end space-x-1.5">
-                                      {ord.type === 'dine_in' ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const tableLoc = ord.location.split(' ')[1] || '号位已传达';
-                                            setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'orders', ord.id), {
-                                              status: 'dispatched',
-                                              tracking: '桌号: ' + tableLoc
-                                            }, { merge: true })
-                                              .catch(err => handleFirestoreError(err, OperationType.UPDATE, `tenants/${tenantId}/industries/${industry.id}/orders/${ord.id}`));
-                                            
-                                            setLogs(prev => [
-                                              ...prev,
-                                              {
-                                                id: Math.random().toString(),
-                                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                                sender: '后厨传菜',
-                                                emoji: '🧑‍🍳',
-                                                message: `✔️ 堂食单【${ord.id}】起锅完成，智能传菜机器人已定位送到座位！`,
-                                                type: 'success'
-                                              }
-                                            ]);
-                                          }}
-                                          className="bg-amber-600 hover:bg-amber-500 duration-100 text-white font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
-                                        >
-                                          一键传菜送达
-                                        </button>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const simulatedTracking = 'MT' + Math.floor(Math.random() * 89999 + 10000);
-                                            setDoc(doc(db, 'tenants', tenantId, 'industries', industry.id, 'orders', ord.id), {
-                                              status: 'dispatched',
-                                              tracking: simulatedTracking
-                                            }, { merge: true })
-                                              .catch(err => handleFirestoreError(err, OperationType.UPDATE, `tenants/${tenantId}/industries/${industry.id}/orders/${ord.id}`));
+                                  <div className="flex justify-end space-x-1.5">
+                                    {ord.status === 'pending' && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            const res = await fetch(`/api/orders/${ord.id}/dispatch`, {
+                                              method: 'PUT',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ 
+                                                status: 'shipped', 
+                                                tenantId, 
+                                                industryId: industry.id 
+                                              })
+                                            });
+                                            const data = await res.json();
+                                            if (!data.success) throw new Error(data.error);
 
                                             setLogs(prev => [
                                               ...prev,
                                               {
                                                 id: Math.random().toString(),
                                                 timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                                sender: '美团专骑',
-                                                emoji: '🛵',
-                                                message: `✔️ 外卖单【${ord.id}】已由骑手背箱接单，骑手电话 139****4243，数字物流单号: ${simulatedTracking}。`,
+                                                sender: '物流中枢',
+                                                emoji: '🚚',
+                                                message: `✔️ 订单【${ord.id}】已极速接单并联系顺丰/机器人履约派送。`,
                                                 type: 'success'
                                               }
                                             ]);
-                                          }}
-                                          className="bg-blue-600 hover:bg-blue-500 duration-100 text-white font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
-                                        >
-                                          呼叫骑手配送
-                                        </button>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="text-[10px] text-zinc-500 font-mono">
-                                      {ord.tracking || '已处理'}
-                                    </span>
-                                  )}
+                                          } catch (err) {
+                                            console.error("Dispatch failed:", err);
+                                          }
+                                        }}
+                                        className="bg-[#1D9BF0] hover:bg-[#38BDF8] duration-100 text-white font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
+                                      >
+                                        接单制作并配送
+                                      </button>
+                                    )}
+
+                                    {ord.status === 'paid' && (
+                                       <button
+                                        type="button"
+                                        onClick={async () => {
+                                          try {
+                                            await fetch(`/api/orders/${ord.id}/dispatch`, {
+                                              method: 'PUT',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ status: 'shipped', tenantId, industryId: industry.id })
+                                            });
+                                            setLogs(prev => [...prev, {
+                                              id: Math.random().toString(),
+                                              timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                                              sender: '履约中枢',
+                                              emoji: '📦',
+                                              message: `📦 订单【${ord.id}】已完成备货，正在派送。`,
+                                              type: 'success'
+                                            }]);
+                                          } catch (err) {}
+                                        }}
+                                        className="bg-emerald-600 hover:bg-emerald-500 duration-100 text-white font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
+                                      >
+                                        标记已发货
+                                      </button>
+                                    )}
+
+                                    {(ord.status === 'pending' || ord.status === 'paid') && ord.status !== 'cancelled' && ord.status !== 'refunded' && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!window.confirm(`确定要取消订单 ${ord.id} 吗？`)) return;
+                                          try {
+                                            const res = await fetch(`/api/orders/${ord.id}/cancel`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ 
+                                                reason: '商家管理端取消', 
+                                                tenantId, 
+                                                industryId: industry.id 
+                                              })
+                                            });
+                                            const data = await res.json();
+                                            if (!data.success) throw new Error(data.error);
+
+                                            setOrdersList(prev => prev.map(item => item.id === ord.id ? { ...item, status: 'cancelled' } : item));
+                                            setLogs(prev => [
+                                              ...prev,
+                                              {
+                                                id: Math.random().toString(),
+                                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                                                sender: '订单运营',
+                                                emoji: '✖️',
+                                                message: `订单【${ord.id}】已被取消。`,
+                                                type: 'warn'
+                                              }
+                                            ]);
+                                          } catch (err) {
+                                            console.error("Cancel failed:", err);
+                                          }
+                                        }}
+                                        className="bg-rose-700 hover:bg-rose-600 text-white border border-rose-700 duration-100 font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
+                                      >
+                                        取消订单
+                                      </button>
+                                    )}
+
+                                    {['paid', 'shipped', 'delivered'].includes(ord.status) && ord.status !== 'return_requested' && ord.status !== 'refunded' && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!window.confirm(`为订单 ${ord.id} 发起退货申请？`)) return;
+                                          try {
+                                            const res = await fetch(`/api/orders/${ord.id}/return`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ 
+                                                reason: '客户申请退货', 
+                                                tenantId, 
+                                                industryId: industry.id 
+                                              })
+                                            });
+                                            const data = await res.json();
+                                            if (!data.success) throw new Error(data.error);
+
+                                            setOrdersList(prev => prev.map(item => item.id === ord.id ? { ...item, status: 'return_requested' } : item));
+                                            setLogs(prev => [
+                                              ...prev,
+                                              {
+                                                id: Math.random().toString(),
+                                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                                                sender: '客服系统',
+                                                emoji: '↩️',
+                                                message: `已为订单【${ord.id}】提交退货申请。`,
+                                                type: 'info'
+                                              }
+                                            ]);
+                                          } catch (err) {
+                                            console.error("Return request failed:", err);
+                                          }
+                                        }}
+                                        className="bg-yellow-600 hover:bg-yellow-500 text-white border border-yellow-600 duration-100 font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
+                                      >
+                                        退货申请
+                                      </button>
+                                    )}
+
+                                    {ord.status !== 'refunded' && (
+                                      <button
+                                        type="button"
+                                        onClick={async () => {
+                                          if (!window.confirm(`确定要为订单 ${ord.id} 办理全额退款吗？`)) return;
+                                          try {
+                                            const res = await fetch(`/api/orders/${ord.id}/refund`, {
+                                              method: 'POST',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ 
+                                                reason: '商家主动退款', 
+                                                tenantId, 
+                                                industryId: industry.id 
+                                              })
+                                            });
+                                            const data = await res.json();
+                                            if (!data.success) throw new Error(data.error);
+
+                                            setLogs(prev => [
+                                              ...prev,
+                                              {
+                                                id: Math.random().toString(),
+                                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                                                sender: '财务合规',
+                                                emoji: '💰',
+                                                message: `⚠️ 订单【${ord.id}】已完成原路退款结算。`,
+                                                type: 'alert'
+                                              }
+                                            ]);
+                                          } catch (err) {
+                                            console.error("Refund failed:", err);
+                                          }
+                                        }}
+                                        className="bg-zinc-800 hover:bg-red-900/40 text-zinc-400 hover:text-red-400 border border-zinc-700 hover:border-red-900/60 duration-100 font-bold text-[9px] px-2 py-1 rounded cursor-pointer"
+                                      >
+                                        办理退款
+                                      </button>
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -5891,8 +5959,40 @@ const handleRestoreFromDrive = async () => {
               {/* VIEW 6: MARKETING 营销 (📣 营销) */}
               {activeMenu === 'marketing' && (
                 <div className="space-y-6">
-                  {/* Sliding budget controllers */}
-                  <div className="bg-[#09090B] border border-[#2F3336] p-5 rounded-xl space-y-4">
+                  {marketingSubTab === 'coupon' && (
+                    <DiscountsView 
+                      tenantId={tenantId}
+                      industryId={industry.id}
+                    />
+                  )}
+
+                  {marketingSubTab === 'markitdown' && (
+                    <MarkItDownHub 
+                      currentIndustryLabel={industry.name}
+                      onSyncToKnowledge={(title, content, code) => {
+                        setLogs((prev: any) => [
+                          {
+                            id: Math.random().toString(),
+                            timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                            sender: '内容中心',
+                            emoji: '📝',
+                            message: `【知识同步】已成功将「${title}」同步至企业知识库。`,
+                            type: 'success'
+                          },
+                          ...prev
+                        ]);
+                      }}
+                      onAddLog={(msg) => setLogs((prev: any) => [
+                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender: '内容中心', emoji: '📝', message: msg, type: 'info' },
+                        ...prev
+                      ])}
+                    />
+                  )}
+
+                  {(marketingSubTab === 'ai' || marketingSubTab === 'campaign') && (
+                    <>
+                      {/* Sliding budget controllers */}
+                      <div className="bg-[#09090B] border border-[#2F3336] p-5 rounded-xl space-y-4">
                     <h3 className="text-xs font-mono uppercase tracking-wider text-[#8B949E]">预算规划</h3>
                     
                     <div className="space-y-2">
@@ -6236,8 +6336,10 @@ const handleRestoreFromDrive = async () => {
                       )}
                     </div>
                   </div>
-                </div>
+                </>
               )}
+            </div>
+          )}
 
               {/* VIEW 7: ANALYTICS 分析 (📊 分析) */}
               {activeMenu === 'analytics' && (
@@ -6614,6 +6716,16 @@ const handleRestoreFromDrive = async () => {
                           </div>
                         )}
                       </div>
+
+                      <BillingSubscriptionPanel
+                        tenantId={tenantId}
+                        onAddLog={(sender, emoji, message, type) => {
+                          setLogs(prev => [
+                            { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender, emoji, message, type },
+                            ...prev
+                          ]);
+                        }}
+                      />
 
                     </div>
 
@@ -7167,178 +7279,211 @@ const handleRestoreFromDrive = async () => {
 
               {/* VIEW 9: TEAM MEMBERS (🤖 团队成员) */}
               {activeMenu === 'team_members' && (
-                <div className="space-y-6">
-                  {/* Dynamic Industry Header */}
-                  <div className="bg-[#09090B] border border-[#2F3336] p-6 rounded-xl relative overflow-hidden text-left">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#1D9BF0]/5 rounded-full blur-3xl pointer-events-none" />
-                    
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xl">{industry.emoji}</span>
-                          <h3 className="text-lg font-bold text-white font-display">{industry.name} — AI 高维专家智能团队</h3>
+                <div className="space-y-6 text-left">
+                  {/* Team Sub-tab Switcher */}
+                  <div className="flex space-x-1 bg-neutral-900/50 p-1 rounded-lg w-fit border border-[#2F3336]">
+                    <button
+                      onClick={() => setTeamSubTab('ai')}
+                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                        teamSubTab === 'ai' ? 'bg-[#1D9BF0] text-white' : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      🤖 AI 专家团队
+                    </button>
+                    <button
+                      onClick={() => setTeamSubTab('human')}
+                      className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                        teamSubTab === 'human' ? 'bg-[#1D9BF0] text-white' : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      👥 人类协作团队
+                    </button>
+                  </div>
+
+                  {teamSubTab === 'ai' ? (
+                    <>
+                      {/* Dynamic Industry Header */}
+                      <div className="bg-[#09090B] border border-[#2F3336] p-6 rounded-xl relative overflow-hidden text-left">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-[#1D9BF0]/5 rounded-full blur-3xl pointer-events-none" />
+                        
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xl">{industry.emoji}</span>
+                              <h3 className="text-lg font-bold text-white font-display">{industry.name} — AI 高维专家智能团队</h3>
+                            </div>
+                            <p className="text-xs text-neutral-400 mt-2 max-w-2xl leading-relaxed">
+                              当前为您的【{industry.name}】自动搭载了 <strong>4 位高智能 AI 数字员工</strong>，全天候 24 小时执行设计、选品、运营、营销 and 客诉监控。
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2 bg-neutral-900/60 border border-[#2F3336] px-3 py-1.5 rounded-lg text-[11px] font-mono whitespace-nowrap text-neutral-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>智体状态: <strong>ACTIVE</strong></span>
+                          </div>
                         </div>
-                        <p className="text-xs text-neutral-400 mt-2 max-w-2xl leading-relaxed">
-                          当前为您的【{industry.name}】自动搭载了 <strong>4 位高智能 AI 数字员工</strong>，全天候 24 小时执行设计、选品、运营、营销和客诉监控，极智提升店面转化收益。你可以调用图像生成引擎，为您团队专属生成独特的数字虚拟形象。
-                        </p>
                       </div>
-                      
-                      <div className="flex items-center space-x-2 bg-neutral-900/60 border border-[#2F3336] px-3 py-1.5 rounded-lg text-[11px] font-mono whitespace-nowrap text-neutral-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>智体团队连接状态: <strong>ACTIVE</strong></span>
+
+                      {/* AI Team Members Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {industry.team.map((member, index) => {
+                          const hasPresetAvatar = memberAvatars[member.name] || memberAvatars[member.role.replace("AI", "")];
+                          const avatarSrc = hasPresetAvatar || `https://picsum.photos/seed/${member.name || member.role}/400/400`;
+                          const isGenerating = isGeneratingAvatarForRole === member.role;
+
+                          return (
+                            <div 
+                              key={index} 
+                              className="bg-[#09090B] border border-[#2F3336] rounded-xl overflow-hidden flex flex-col md:flex-row text-left duration-150 hover:border-neutral-700/80 group"
+                            >
+                              <div className="w-full md:w-36 h-36 relative bg-neutral-950 flex items-center justify-center border-b md:border-b-0 md:border-r border-[#2F3336] shrink-0 overflow-hidden">
+                                {isGenerating && (
+                                  <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-3 text-center space-y-2 z-25">
+                                    <span className="w-6 h-6 rounded-full border-2 border-[#1D9BF0] border-t-transparent animate-spin" />
+                                    <div className="space-y-0.5">
+                                      <span className="text-[10px] font-mono text-[#1D9BF0] block font-bold">{avatarProgress}%</span>
+                                      <span className="text-[8px] text-[#8B949E] block animate-pulse leading-snug">{avatarProgressText}</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <img src={avatarSrc} alt={member.role} className="w-full h-full object-cover group-hover:scale-105 duration-300" />
+                                <div className="absolute bottom-2 left-2 bg-black/85 border border-[#2F3336] px-2 py-0.5 rounded text-[9px] text-white font-mono flex items-center space-x-1">
+                                  <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span>在线</span>
+                                </div>
+                              </div>
+                              <div className="flex-1 p-4 flex flex-col justify-between">
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-white">{member.role} • {member.name}</span>
+                                    <span className="text-[9px] font-mono bg-[#1D9BF0]/10 text-sky-400 border border-[#1D9BF0]/20 px-1.5 py-0.5 rounded">COGNITIVE</span>
+                                  </div>
+                                  <p className="text-[11px] text-neutral-400 leading-relaxed line-clamp-2">{member.desc}</p>
+                                </div>
+                                <div className="flex items-center justify-between pt-2 border-t border-[#2F3336]/40">
+                                  <div className="text-[9px] text-[#8B949E] font-mono">算力: <strong className="text-white">High</strong></div>
+                                  <button onClick={() => triggerAvatarGeneration(member)} className="text-[9px] px-2 py-1 rounded border border-[#1D9BF0]/40 bg-[#1D9BF0]/10 text-sky-400 hover:bg-[#1D9BF0]/20 font-bold">重修形象</button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Human Team Header */}
+                      <div className="bg-[#09090B] border border-[#2F3336] p-6 rounded-xl flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-white font-display">人类协作团队 (Human Staff)</h3>
+                          <p className="text-xs text-neutral-400 mt-1">管理您的企业成员，分配管理、运营或客服席位。</p>
+                        </div>
+                        <button 
+                          onClick={() => setIsAddingMember(true)}
+                          className="px-4 py-2 bg-[#1D9BF0] hover:bg-[#38BDF8] text-white text-xs font-bold rounded-lg flex items-center space-x-2 transition-all"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>邀请成员</span>
+                        </button>
+                      </div>
+
+                      {/* Add Member Modal */}
+                      {isAddingMember && (
+                        <div className="bg-[#09090B] border border-[#1D9BF0]/30 p-6 rounded-xl space-y-4 animate-fadeIn">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-white">邀请新成员</h4>
+                            <button onClick={() => setIsAddingMember(false)}><X className="w-4 h-4 text-neutral-500" /></button>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider block">邮箱地址</label>
+                              <input 
+                                type="email" 
+                                value={newMemberEmail}
+                                onChange={(e) => setNewMemberEmail(e.target.value)}
+                                className="w-full bg-black border border-[#2F3336] rounded-lg p-2 text-xs text-white focus:outline-none"
+                                placeholder="staff@company.com"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-mono text-[#8B949E] uppercase tracking-wider block">分配角色</label>
+                              <select 
+                                value={newMemberRole}
+                                onChange={(e) => setNewMemberRole(e.target.value as any)}
+                                className="w-full bg-black border border-[#2F3336] rounded-lg p-2 text-xs text-white focus:outline-none"
+                              >
+                                <option value="manager">高级经理 (Manager)</option>
+                                <option value="staff">运营员工 (Staff)</option>
+                                <option value="founder">联合创始人 (Founder)</option>
+                              </select>
+                            </div>
+                          </div>
+                          <button 
+                            onClick={handleAddMember}
+                            className="w-full py-2 bg-[#1D9BF0] text-white text-xs font-bold rounded-lg hover:bg-[#38BDF8] transition-all"
+                          >
+                            发送邀请并入库
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Human Members Table */}
+                      <div className="bg-[#09090B] border border-[#2F3336] rounded-xl overflow-hidden">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="bg-neutral-900/50 border-b border-[#2F3336] text-[#8B949E] font-mono uppercase tracking-widest text-[10px]">
+                              <th className="p-4">成员邮箱</th>
+                              <th className="p-4">角色席位</th>
+                              <th className="p-4">状态</th>
+                              <th className="p-4">加入时间</th>
+                              <th className="p-4 text-right">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#2F3336]">
+                            {humanMembers.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="p-10 text-center text-neutral-500 italic">
+                                  目前暂无其他人类协作成员。点击上方按钮邀请团队。
+                                </td>
+                              </tr>
+                            ) : (
+                              humanMembers.map((member) => (
+                                <tr key={member.id} className="hover:bg-white/[0.02] transition-colors">
+                                  <td className="p-4 font-medium text-white">{member.email}</td>
+                                  <td className="p-4">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                      member.role === 'founder' ? 'bg-amber-950/20 text-amber-400 border-amber-900/30' :
+                                      member.role === 'manager' ? 'bg-blue-950/20 text-blue-400 border-blue-900/30' :
+                                      'bg-neutral-900 text-neutral-400 border-neutral-800'
+                                    }`}>
+                                      {member.role.toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td className="p-4">
+                                    <div className="flex items-center space-x-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                      <span className="text-emerald-500 font-bold text-[10px]">ACTIVE</span>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 text-[#8B949E] font-mono">
+                                    {member.invitedAt?.toDate().toLocaleDateString() || '2026-06-04'}
+                                  </td>
+                                  <td className="p-4 text-right">
+                                    <button 
+                                      onClick={() => handleRemoveMember(member.id, member.email)}
+                                      className="p-1.5 hover:bg-red-950/20 rounded-lg text-neutral-500 hover:text-red-500 transition-all"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Team Members Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {industry.team.map((member, index) => {
-                      const hasPresetAvatar = memberAvatars[member.name] || memberAvatars[member.role.replace("AI", "")];
-                      const avatarSrc = hasPresetAvatar || `https://picsum.photos/seed/${member.name || member.role}/400/400`;
-                      const isGenerating = isGeneratingAvatarForRole === member.role;
-
-                      // Triggering a custom visual avatar generation simulation with steps
-                      const triggerAvatarGeneration = () => {
-                        if (isGeneratingAvatarForRole) return;
-                        setIsGeneratingAvatarForRole(member.role);
-                        setAvatarProgress(0);
-                        setAvatarProgressText("🔍 分析岗位提示词权重...");
-                        setLogs(prev => [
-                          ...prev,
-                          {
-                            id: Math.random().toString(),
-                            timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                            sender: 'AI 绘人网关',
-                            emoji: '🎨',
-                            message: `⚡ 启动对 【${member.role} — ${member.name}】 专属智体形象的二次智能合成重排...`,
-                            type: 'info'
-                          }
-                        ]);
-
-                        const intervalSteps = [
-                          { val: 20, text: "🔍 分析岗位提示词权重..." },
-                          { val: 45, text: "🌌 生成全彩潜向量空间..." },
-                          { val: 75, text: "✨ 渲染超清光影与面部轮廓..." },
-                          { val: 95, text: "🛡️ 重置 C8 通道滤镜并封装..." },
-                          { val: 100, text: "✔ 专家级 1:1 特制人像载入成功！" }
-                        ];
-
-                        let currentIdx = 0;
-                        const timer = setInterval(() => {
-                          if (currentIdx < intervalSteps.length) {
-                            const step = intervalSteps[currentIdx];
-                            setAvatarProgress(step.val);
-                            setAvatarProgressText(step.text);
-                            currentIdx++;
-                          } else {
-                            clearInterval(timer);
-                            // Set a new dynamic random high fidelity avatar URL
-                            const uniqueSeed = member.name + '-' + Math.floor(Math.random() * 9999);
-                            setMemberAvatars(prev => ({
-                              ...prev,
-                              [member.name]: `https://picsum.photos/seed/${uniqueSeed}/400/400`
-                            }));
-                            setIsGeneratingAvatarForRole(null);
-                            setLogs(prev => [
-                              ...prev,
-                              {
-                                id: Math.random().toString(),
-                                timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                sender: 'AI 绘人网关',
-                                emoji: '🎨',
-                                message: `🎨 智体形象重画成功！【${member.role} - ${member.name}】专属虚拟形象头像及风格配置文件已热重载加载。`,
-                                type: 'success'
-                              }
-                            ]);
-                          }
-                        }, 750);
-                      };
-
-                      return (
-                        <div 
-                          key={index} 
-                          className="bg-[#09090B] border border-[#2F3336] rounded-xl overflow-hidden flex flex-col md:flex-row text-left duration-150 hover:border-neutral-700/80 group"
-                        >
-                          {/* Image Container Area */}
-                          <div className="w-full md:w-36 h-36 relative bg-neutral-950 flex items-center justify-center border-b md:border-b-0 md:border-r border-[#2F3336] shrink-0 overflow-hidden">
-                            {isGenerating ? (
-                              <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center p-3 text-center space-y-2 z-25">
-                                <span className="w-6 h-6 rounded-full border-2 border-[#1D9BF0] border-t-transparent animate-spin" />
-                                <div className="space-y-0.5">
-                                  <span className="text-[10px] font-mono text-[#1D9BF0] block font-bold">{avatarProgress}%</span>
-                                  <span className="text-[8px] text-[#8B949E] block animate-pulse leading-snug">{avatarProgressText}</span>
-                                </div>
-                              </div>
-                            ) : null}
-
-                            <img 
-                              src={avatarSrc} 
-                              alt={`${member.role} Avatar`}
-                              referrerPolicy="no-referrer"
-                              className="w-full h-full object-cover group-hover:scale-105 duration-300 pointer-events-none select-none"
-                            />
-
-                            <div className="absolute bottom-2 left-2 bg-black/85 border border-[#2F3336] px-2 py-0.5 rounded text-[9px] text-white font-mono flex items-center space-x-1 shrink-0 z-10">
-                              <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
-                              <span>智体在线</span>
-                            </div>
-                          </div>
-
-                          {/* Detail Info Card Panel */}
-                          <div className="flex-1 p-4 flex flex-col justify-between">
-                            <div className="space-y-1.5">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-white font-display tracking-tight flex items-center gap-1.5">
-                                  <span>{member.role} • {member.name}</span>
-                                </span>
-                                <span className="text-[9px] font-mono bg-[#1D9BF0]/10 text-sky-400 border border-[#1D9BF0]/20 px-1.5 py-0.5 rounded">
-                                  COGNITIVE
-                                </span>
-                              </div>
-
-                              <p className="text-[11px] text-neutral-400 leading-relaxed min-h-[32px]">
-                                {member.desc || "担任对应行业核心智能算法算力调度，主理线上店面全方位自主经营业务。"}
-                              </p>
-
-                              {/* Task Checklist inside card */}
-                              <div className="space-y-1 pt-1.5 border-t border-[#2F3336]/60">
-                                <span className="text-[9px] font-mono text-[#8B949E] uppercase tracking-wider block">今日核心任务 (Daily Backlog)</span>
-                                <div className="space-y-0.5">
-                                  {member.tasks?.slice(0, 2).map((task, tIdx) => (
-                                    <div key={tIdx} className="flex items-start space-x-1.5 text-[10px] text-neutral-300">
-                                      <span className="text-emerald-500 shrink-0">✦</span>
-                                      <span className="truncate max-w-[210px]" title={task}>{task}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Actions bar inside individual expert card */}
-                            <div className="flex items-center justify-between pt-2 border-t border-[#2F3336]/40 mt-2 md:mt-0">
-                              <div className="text-[9px] text-[#8B949E] font-mono">
-                                算力占用: <strong className="text-white">Medium</strong>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={triggerAvatarGeneration}
-                                disabled={isGeneratingAvatarForRole !== null}
-                                className={`text-[10px] px-2 py-1 rounded-lg border flex items-center space-x-1.5 font-bold transition-all duration-150 cursor-pointer ${
-                                  isGeneratingAvatarForRole !== null
-                                    ? 'border-neutral-800 bg-neutral-900 text-neutral-500 cursor-not-allowed'
-                                    : 'border-[#1D9BF0]/40 bg-[#1D9BF0]/10 text-sky-400 hover:bg-[#1D9BF0]/20 hover:text-white hover:border-[#1D9BF0]'
-                                }`}
-                              >
-                                <Sparkles className="w-2.5 h-2.5" />
-                                <span>{isGenerating ? "正在重设..." : "重修智体形象"}</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  )}
 
                   {/* Collaborative AI intelligence framework visualization map in team space */}
                   <div className="bg-[#09090B] border border-[#2F3336] p-6 rounded-xl space-y-4 text-left">
@@ -7415,6 +7560,58 @@ const handleRestoreFromDrive = async () => {
               {/* VIEW 14: FINANCE HUB (🏦 金融与钱包) */}
               {activeMenu === 'finance' && (
                 <FinanceHubView tenantId={industry.id} />
+              )}
+
+              {/* VIEW 15: AI OPERATIONS HUB (🧠 智体枢纽) */}
+              {activeMenu === 'ai_ops' && (
+                <div className="space-y-6">
+                  {/* Sub-navigation for AI Ops */}
+                  <div className="flex items-center gap-2 p-1 bg-black/40 border border-[#2F3336] rounded-xl w-fit">
+                    {[
+                      { id: 'ecc', name: 'ECC 智控', icon: Cpu },
+                      { id: 'langgraph', name: '智体工作流', icon: Zap },
+                      { id: 'hypermem', name: '超导记忆', icon: Database },
+                      { id: 'validator', name: '合规验证', icon: ShieldAlert }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setAiOpsSubTab(tab.id as any)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                          aiOpsSubTab === tab.id 
+                            ? 'bg-[#1D9BF0] text-white shadow-lg' 
+                            : 'text-[#8B949E] hover:bg-[#2F3336]/50'
+                        }`}
+                      >
+                        <tab.icon className="w-3.5 h-3.5" />
+                        {tab.name}
+                      </button>
+                    ))}
+                  </div>
+
+                  {aiOpsSubTab === 'ecc' && (
+                    <ECCAgentConsole 
+                      agents={[]}
+                      onUpdateAgentTask={() => {}}
+                      onAddLog={(msg) => setLogs((prev: any) => [
+                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender: 'ECC智控', emoji: '🧠', message: msg, type: 'info' },
+                        ...prev
+                      ])}
+                    />
+                  )}
+
+                  {aiOpsSubTab === 'langgraph' && (
+                    <LangGraphCanvas 
+                      initialNodes={[]}
+                      isExecutingSim={false}
+                      setIsExecutingSim={() => {}}
+                      onAddLog={(msg) => setLogs((prev: any) => [
+                        { id: Math.random().toString(), timestamp: new Date().toLocaleTimeString('zh-CN', { hour12: false }), sender: '智体工作流', emoji: '⛓️', message: msg, type: 'info' },
+                        ...prev
+                      ])}
+                      onUpdateSimDetail={() => {}}
+                    />
+                  )}
+                </div>
               )}
 
               {/* VIEW 11: DEVELOPER CONSOLE INTEGRATION (💻 开发者) */}

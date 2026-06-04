@@ -29,7 +29,9 @@ import {
   Key, 
   Layers, 
   Activity, 
+  Video,
   HelpCircle,
+  BookOpen,
   Menu,
   ChevronRight,
   TrendingUp,
@@ -38,11 +40,50 @@ import {
   Image as ImageIcon,
   Sparkles,
   MessageSquare,
-  Terminal
+  Terminal,
+  Database,
+  Github,
+  MessageCircle,
+  Smartphone,
+  Chrome,
+  Zap,
+  File,
+  HardDrive,
+  ShieldCheck,
+  List,
+  Server,
+  Eye,
+  Code,
+  Loader2,
+  Check,
+  CreditCard,
+  Wallet,
+  ShoppingBag,
+  Heart,
+  Headphones,
+  Layout,
+  Globe2
 } from 'lucide-react';
+import { db } from '../services/firebase';
+import { apiService } from '../services/api';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { ResponsiveContainer, AreaChart, Area, XAxis, Tooltip } from 'recharts';
 import AuthPanel from './platform-admin/AuthPanel';
 import StoreCountCard from './platform-admin/StoreCountCard';
+import TenantManagement from './platform-admin/TenantManagement';
+import PlatformFinance from './platform-admin/PlatformFinance';
+import BillingSubscriptionPanel from './BillingSubscriptionPanel';
+import PlatformAnalytics from './platform-admin/PlatformAnalytics';
+import InfrastructureServices from './platform-admin/InfrastructureServices';
+import OperationsDevOps from './platform-admin/OperationsDevOps';
+import SystemSettings from './platform-admin/SystemSettings';
+import AppStoreManagement from './platform-admin/AppStoreManagement';
+import ThemeStore from './platform-admin/ThemeStore';
+import CustomerSupport from './platform-admin/CustomerSupport';
+import LVAView from './platform-admin/LVAView';
+import ECCAgentConsole from './ECCAgentConsole';
+import MarkItDownHub from './MarkItDownHub';
+import { generateWithOllama } from '../services/ollama.service';
 
 interface PlatformAdminViewProps {
   onBackToLanding: () => void;
@@ -62,68 +103,100 @@ const activeSpecialistMap: Record<string, {
   suggestions: string[];
 }> = {
   overview: {
-    name: '对账专家 Fiona',
-    role: 'AI 全局托管总监',
+    name: 'Fiona',
+    role: '全局托管',
     emoji: '🧙',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '负责全局算力分配、多租户订阅费用审计、Token吞吐量与SaaS全局收益健康状况。',
-    suggestions: ['查看算力QPS预警', '刷新全局多租户 Session', '导出本日入账分析'],
+    desc: '监控算力分配与系统收益。',
+    suggestions: ['算力预警', '刷新会话', '本日分析'],
   },
   company: {
-    name: '准入专家 Susan',
-    role: 'AI 租户资质审计与合规经理',
+    name: 'Susan',
+    role: '租户审计',
     emoji: '👩‍💼',
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '负责多行业租户的资质初审、开户准入审计、顺丰官方配送授权证书即时核验。',
-    suggestions: ['一键准入开盘理想家', '驳回蜜雪冰城挂牌申请', '审查到期挂起租户'],
+    desc: '负责企业准入与资质审核。',
+    suggestions: ['一键准入', '驳回申请', '到期检查'],
   },
   ai: {
-    name: '架构专家 Barton',
-    role: 'AI 算力与智体调配总顾问',
+    name: 'Barton',
+    role: '智体调度',
     emoji: '🤖',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '负责 36 专业岗位智体的标准认知权重调整、API 流控策略部署以及 Gemini-3.5 运行率精算。',
-    suggestions: ['调增 Aria 设计师权重', '启动流量智能限速模式', '重刷 AI Standard 能力缓存'],
+    desc: '调整智体权重与接口流控。',
+    suggestions: ['调整权重', '智能限速', '刷新能力'],
   },
   task: {
-    name: '跟单专家 Cyrus',
-    role: 'AI 系统工作流与DAG调试大师',
+    name: 'Cyrus',
+    role: '流水调试',
     emoji: '👨‍🎤',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '负责 DAG 流程断点纠错追踪、顺丰履单接口 Callback 回调核销以及阻塞队列一键解锁。',
-    suggestions: ['模拟单步 DAG 运行', '重放订单 WF-8095 清关', '强制释放已排队事务'],
+    desc: '追踪流程断点与接口回调。',
+    suggestions: ['单步运行', '重放订单', '释放队列'],
   },
   template: {
-    name: '创意总监 Aria',
-    role: 'AI 行业微调模板与Prompt架构总监',
+    name: 'Aria',
+    role: '行业模板',
     emoji: '🎨',
     avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '定制 6 大核心垂直行业微调模板，审查 Prompt 质量、线上橱窗与大促逻辑版本更迭。',
-    suggestions: ['预装珠宝极奢保真模板', '验证 2026 最新服装词句', '一键检查餐饮满减机制'],
+    desc: '管理行业微调与指令模板。',
+    suggestions: ['预装模板', '验证指令', '检查机制'],
   },
   finance: {
-    name: '财务主管 Fiona',
-    role: 'AI 全栈结算与多币种金流官',
+    name: 'Fiona',
+    role: '财务金流',
     emoji: '🧮',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '负责 Stripe 与微信支付全球账目平准、API Token 算力费用核扣以及账单对账。',
-    suggestions: ['模拟 32K 租赁回调入账', '生成本日多租户毛利报表', '金价极速波动套利平盘'],
+    desc: '处理支付对账与费用核扣。',
+    suggestions: ['模拟入账', '损益报表', '平盘分析'],
   },
   user: {
-    name: '风控专家 Jane',
-    role: 'AI 多租户身份安全主管',
+    name: 'Jane',
+    role: '安全风控',
     emoji: '👮‍♀️',
     avatar: 'https://images.unsplash.com/photo-1548142813-c348350df52b?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '审计超级管理员和租户的登录探针、防御会话持劫异常以及 RBAC 端点权限一致性。',
-    suggestions: ['检索 barbrostruck 会话', '拉黑高频无动作 Session', '强刷 RBAC 多租户一致密码'],
+    desc: '审计登录安全与权限一致。',
+    suggestions: ['检索会话', '拉黑账号', '刷新权限'],
+  },
+  database: {
+    name: 'Vance',
+    role: '本地存储',
+    emoji: '🗄️',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80',
+    desc: '同步本地数据与备份回滚。',
+    suggestions: ['浏览库', '刷新缓存', '数据回滚'],
+  },
+  knowledge: {
+    name: 'Nova',
+    role: '知识库',
+    emoji: '📚',
+    avatar: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=150&h=150&q=80',
+    desc: '管理行业知识与产品档案。',
+    suggestions: ['更新知识', '导入档案', '优化营销'],
+  },
+  infra: {
+    name: 'Vance',
+    role: '基础底层',
+    emoji: '🔌',
+    avatar: 'https://images.unsplash.com/photo-1550439062-609e1531270e?auto=format&fit=crop&w=150&h=150&q=80',
+    desc: '监控 API 流量与服务架构。',
+    suggestions: ['检查流量', '同步日志', '清理缓存'],
   },
   system: {
-    name: '网管老兵 Vance',
-    role: 'AI 全局加密防火墙哨官',
+    name: 'Vance',
+    role: '安全防护',
     emoji: '👨‍🔧',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80',
-    desc: '管理 API 密钥池安全水位、即时监控安全防火墙拦截状态以及防御 DDoS 跨站请求。',
-    suggestions: ['激活全局 DDoS 防御盾牌', '重刷 Stripe 密钥加密桶', '清空全局系统审计日志'],
+    desc: '管理密钥池与防火墙状态。',
+    suggestions: ['激活防护', '重刷密钥', '清空日志'],
+  },
+  settings: {
+    name: 'Vance',
+    role: '全域总控',
+    emoji: '⚙️',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150&q=80',
+    desc: '管理平台全局参数、支付网关与 AI 策略。',
+    suggestions: ['功能注册', '支付开关', '通知配置'],
   }
 };
 
@@ -136,15 +209,370 @@ export default function PlatformAdminView({
 }: PlatformAdminViewProps) {
   
   // --- NAVIGATION STATE ---
-  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'ai' | 'task' | 'template' | 'finance' | 'user' | 'system'>(
+  const [activeTab, setActiveTab] = useState<'overview' | 'company' | 'ai' | 'ecc' | 'task' | 'template' | 'finance' | 'user' | 'support' | 'lva' | 'system' | 'database' | 'knowledge' | 'infra' | 'settings' | 'app_store' | 'theme' | 'ops'>(
     defaultView === 'system' ? 'system' : 'overview'
   );
   
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
   const [kbSearch, setKbSearch] = useState<string>('');
 
+  // --- PLATFORM SETTINGS STATE ---
+  const [platformSettings, setPlatformSettings] = useState<any>({
+    ai: {
+      provider: 'ollama',
+      model: 'llama3.1:8b',
+      endpoint: 'http://localhost:11434',
+      apiKey: '••••••••••••••••'
+    },
+    payment: {
+      stripe: true,
+      alipay: true,
+      wechat: true,
+      paypal: false,
+      testMode: true
+    },
+    features: {
+      allowRegistration: true,
+      maintenanceMode: false,
+      aiAutoDispatch: true
+    },
+    notifications: {
+      email: true,
+      webhook: true,
+      sms: false
+    },
+    security: {
+      twoFactorRequired: false,
+      sessionTimeout: 3600,
+      maxLoginAttempts: 5
+    }
+  });
+  const [configRegistry, setConfigRegistry] = useState<any[]>([]);
+  const [configReport, setConfigReport] = useState<any>(null);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+
+  const loadPlatformSettings = async () => {
+    setIsSettingsLoading(true);
+    try {
+      const data = await apiService.platformSettings.get();
+      if (data.settings) {
+        setPlatformSettings(data.settings);
+      }
+    } catch (e) {
+      console.error('Failed to load platform settings:', e);
+    } finally {
+      setIsSettingsLoading(false);
+    }
+  };
+
+  const loadConfigRegistry = async () => {
+    try {
+      const [registryData, reportData] = await Promise.all([
+        apiService.configRegistry.list(),
+        apiService.configRegistry.report()
+      ]);
+      if (registryData.registry) setConfigRegistry(registryData.registry);
+      if (reportData.report) setConfigReport(reportData.report);
+    } catch (e) {
+      console.error('Failed to load config registry:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadPlatformSettings();
+    loadConfigRegistry();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'settings') {
+      loadPlatformSettings();
+      loadConfigRegistry();
+    }
+  }, [activeTab]);
+
+  const saveSettings = async (category: string, data: any) => {
+    const newSettings = { ...platformSettings, [category]: data };
+    setPlatformSettings(newSettings);
+    try {
+      await apiService.platformSettings.update(newSettings);
+      await loadConfigRegistry();
+    } catch (e) {
+      console.error('Failed to save settings:', e);
+    }
+  };
+
+  // --- OLLAMA STATE ---
+  const [ollamaStatus, setOllamaStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking');
+  const [ollamaModels, setOllamaModels] = useState<any[]>([]);
+
+  useEffect(() => {
+    const checkOllama = async () => {
+      try {
+        const res = await fetch('http://localhost:11434/api/tags');
+        if (res.ok) {
+          const data = await res.json();
+          setOllamaStatus('connected');
+          setOllamaModels(data.models || []);
+        } else {
+          setOllamaStatus('disconnected');
+        }
+      } catch (e) {
+        setOllamaStatus('disconnected');
+      }
+    };
+    checkOllama();
+  }, []);
   // --- SUB-SECTIONS STATE ---
-  const [selectedSubTab, setSelectedSubTab] = useState<string>('all');
+   const [selectedSubTab, setSelectedSubTab] = useState<string>('all');
+   const [selectedIndustry, setSelectedIndustry] = useState<string>('fashion');
+  const [kbCategory, setKbCategory] = useState<string>('all');
+  const [infraSubTab, setInfraSubTab] = useState<'rbac' | 'api' | 'infrastructure' | 'firewall' | 'queue' | 'bucket'>('rbac');
+
+  const [operationDocs, setOperationDocs] = useState<any[]>([]);
+  const [docTitle, setDocTitle] = useState('');
+  const [docContent, setDocContent] = useState('');
+  const [docTags, setDocTags] = useState('');
+  const [tenantList, setTenantList] = useState<any[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>('MODA_FASHION_01');
+  const [tenantQuotaInput, setTenantQuotaInput] = useState<number>(0);
+  const [auditMessage, setAuditMessage] = useState('');
+  const [opLoading, setOpLoading] = useState(false);
+  const [opMessage, setOpMessage] = useState('等待操作...');
+  const [templateInstallIndustry, setTemplateInstallIndustry] = useState<'fashion' | 'catering' | 'beauty' | 'fitness' | 'jewelry' | 'retail'>('fashion');
+  const [docSaveStatus, setDocSaveStatus] = useState<string>('');
+
+  const loadOperationData = async () => {
+    setOpLoading(true);
+    try {
+      const [docsRes, tenantsRes] = await Promise.all([
+        apiService.documents.list(),
+        apiService.tenants.list()
+      ]);
+
+      if (docsRes?.documents) {
+        setOperationDocs(docsRes.documents);
+      }
+
+      const tenants = tenantsRes?.tenants || tenantsRes?.merchants || [];
+      setTenantList(tenants);
+      if (tenants.length > 0) {
+        const defaultId = tenants[0].id || tenants[0].merchantId || tenants[0].name;
+        setSelectedTenantId(defaultId);
+        setTenantQuotaInput(Number(tenants[0].quotaLimit || tenants[0].quota || 0));
+      }
+    } catch (e) {
+      console.error('Failed to load operations data:', e);
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'ops') {
+      loadOperationData();
+    }
+  }, [activeTab]);
+
+  const createOperationalDocument = async () => {
+    if (!docTitle.trim() || !docContent.trim()) {
+      setDocSaveStatus('文档标题和内容不能为空');
+      return;
+    }
+    setOpLoading(true);
+    try {
+      const tenantId = selectedTenantId || 'default_tenant';
+      const response = await apiService.documents.create(tenantId, docTitle.trim(), docContent.trim(), docTags.split(',').map(tag => tag.trim()).filter(Boolean));
+      if (response?.document) {
+        setOperationDocs(prev => [response.document, ...prev]);
+        setDocTitle('');
+        setDocContent('');
+        setDocTags('');
+        setDocSaveStatus('运营文档已保存并入库');
+        setOpMessage(`已为商户 ${tenantId} 写入新文档：${response.document.title}`);
+      }
+    } catch (e) {
+      console.error('Failed to save document:', e);
+      setDocSaveStatus('保存失败，请重试');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleInstallTemplate = async () => {
+    if (!selectedTenantId) return;
+    setOpLoading(true);
+    try {
+      await apiService.templates.install(selectedTenantId, templateInstallIndustry);
+      setOpMessage(`已为 ${selectedTenantId} 预装行业模板：${templateInstallIndustry}`);
+    } catch (e) {
+      console.error('Failed to install template:', e);
+      setOpMessage('模板安装失败，请检查权限');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleSyncOrders = async () => {
+    if (!selectedTenantId) return;
+    setOpLoading(true);
+    try {
+      await apiService.channels.syncOrders(selectedTenantId);
+      setOpMessage(`已触发 ${selectedTenantId} 的渠道订单同步`);
+    } catch (e) {
+      console.error('Order sync failed:', e);
+      setOpMessage('渠道订单同步失败，请重试');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleSuspendTenant = async (tenantId: string, suspend = true) => {
+    setOpLoading(true);
+    try {
+      await apiService.merchants.suspend(tenantId, `Platform admin ${suspend ? 'initiated suspension' : 'reactivation'}`, suspend);
+      setTenantList(prev => prev.map(t => t.id === tenantId ? { ...t, status: suspend ? 'suspended' : 'active' } : t));
+      setCompanies(prev => prev.map(c => c.id === tenantId ? { ...c, status: suspend ? '已挂起' : '运行中' } : c));
+      setOpMessage(suspend ? `已挂起商户 ${tenantId}` : `已恢复商户 ${tenantId}`);
+    } catch (e) {
+      console.error('Suspend failed:', e);
+      setOpMessage('商户状态更新失败');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleUpdateTenantQuota = async () => {
+    if (!selectedTenantId) return;
+    setOpLoading(true);
+    try {
+      await apiService.tenants.update(selectedTenantId, { quotaLimit: tenantQuotaInput });
+      setTenantList(prev => prev.map(t => t.id === selectedTenantId ? { ...t, quotaLimit: tenantQuotaInput } : t));
+      setOpMessage(`租户 ${selectedTenantId} 的配额已更新为 ${tenantQuotaInput}`);
+    } catch (e) {
+      console.error('Quota update failed:', e);
+      setOpMessage('租户配额更新失败，请重试');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const handleCreateAuditLog = async () => {
+    if (!selectedTenantId) {
+      setAuditMessage('请先选择租户');
+      return;
+    }
+    setOpLoading(true);
+    try {
+      const logResult = await apiService.auditLogs.create(selectedTenantId, 'TENANT_ADMIN_REVIEW', 'PLATFORM_ADMIN', `Admin review action executed for tenant ${selectedTenantId}`);
+      if (logResult?.log) {
+        setAuditMessage(`已记录审计日志：${logResult.log.action}`);
+      } else {
+        setAuditMessage('审计日志已提交');
+      }
+    } catch (e) {
+      console.error('Audit log creation failed:', e);
+      setAuditMessage('审计日志提交失败');
+    } finally {
+      setOpLoading(false);
+    }
+  };
+
+  const refreshTenantData = async () => {
+    await loadOperationData();
+    setOpMessage('租户与文档数据已刷新');
+  };
+
+  // --- INDUSTRY TEAMS DATA (Consolidated from AITeamsView) ---
+  const industryTeams = [
+    {
+      id: 'fashion',
+      name: '服装团队',
+      emoji: '👗',
+      tagline: '潮流预测、成本核算、一件发货。',
+      color: 'from-sky-500/20 to-indigo-500/10 border-sky-500/30',
+      roster: [
+        { role: '设计师', name: 'Aria', emoji: '🎨', desc: '负责视觉陈列与海报设计。', status: 'active', specialty: ['橱窗搭配', '品牌设计'], cognitiveWeight: 'GPT-4o', promptsCount: 14 },
+        { role: '采购经理', name: 'Barton', emoji: '👚', desc: '负责款式采购与上架。', status: 'active', specialty: ['趋势抓取', '精算体系'], cognitiveWeight: 'Gemini Pro', promptsCount: 8 },
+        { role: '运营经理', name: 'Cyrus', emoji: '📈', desc: '负责物流揽件与库存监控。', status: 'active', specialty: ['物流履约', '库存告警'], cognitiveWeight: 'Claude 3.5', promptsCount: 19 },
+        { role: '营销经理', name: 'Daphne', emoji: '📣', desc: '负责文案输出与视频脚本。', status: 'active', specialty: ['种草文案', '短视频'], cognitiveWeight: 'DeepSeek', promptsCount: 22 },
+        { role: '财务主管', name: 'Fiona', emoji: '🧮', desc: '负责对账与损益核算。', status: 'active', specialty: ['资金核销', '损耗精算'], cognitiveWeight: 'DeepSeek-R1', promptsCount: 15 },
+        { role: '客服主管', name: 'Claire', emoji: '💬', desc: '负责售后接待与退款解决。', status: 'active', specialty: ['响应安抚', '阻退解决'], cognitiveWeight: 'GPT-4o-mini', promptsCount: 20 }
+      ]
+    },
+    {
+      id: 'catering',
+      name: '餐饮团队',
+      emoji: '🍛',
+      tagline: '外卖调度、满减核算、探店推广。',
+      color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30',
+      roster: [
+        { role: '菜单顾问', name: 'Kai', emoji: '🍽️', desc: '负责网店视觉与海报。', status: 'active', specialty: ['菜单陈列', 'VI排版'], cognitiveWeight: 'Gemini Flash', promptsCount: 11 },
+        { role: '采购经理', name: 'Ren', emoji: '🍜', desc: '负责新品研发与配方。', status: 'active', specialty: ['菜谱研发', '溢价建议'], cognitiveWeight: 'Gemini Pro', promptsCount: 6 },
+        { role: '运营经理', name: 'Lulu', emoji: '📈', desc: '负责派单调度与售后。', status: 'active', specialty: ['派单呼叫', '资金对账'], cognitiveWeight: 'GPT-4o-mini', promptsCount: 15 },
+        { role: '营销经理', name: 'Soren', emoji: '📣', desc: '负责营销活动与神券。', status: 'active', specialty: ['神券预算', '社群宣发'], cognitiveWeight: 'DeepSeek-R1', promptsCount: 25 },
+        { role: '财务主管', name: 'Ken', emoji: '💰', desc: '负责账期对冲与核算。', status: 'active', specialty: ['账期审计', '食材统计'], cognitiveWeight: 'DeepSeek-V3', promptsCount: 12 },
+        { role: '客服主管', name: 'Mia', emoji: '📞', desc: '负责出餐关怀与赔付。', status: 'active', specialty: ['危机处理', '专属券'], cognitiveWeight: 'GPT-4o-mini', promptsCount: 18 }
+      ]
+    },
+    {
+      id: 'retail',
+      name: '零售团队',
+      emoji: '🏪',
+      tagline: '选品定价、官方配送、推广竞价。',
+      color: 'from-emerald-500/20 to-teal-500/10 border-emerald-500/30',
+      roster: [
+        { role: '选品顾问', name: 'Dax', emoji: '🏪', desc: '负责门面布局与陈列。', status: 'active', specialty: ['风格适配', '一键换色'], cognitiveWeight: 'Gemini Flash', promptsCount: 9 },
+        { role: '采购经理', name: 'Barton', emoji: '📦', desc: '负责百货开发与熔断。', status: 'active', specialty: ['质量监控', '规格定价'], cognitiveWeight: 'Claude 3.5', promptsCount: 12 },
+        { role: '运营经理', name: 'Cyrus', emoji: '📈', desc: '负责一单代发与跟踪。', status: 'active', specialty: ['包裹监控', '货代审计'], cognitiveWeight: 'GPT-4o', promptsCount: 20 },
+        { role: '营销经理', name: 'Nova', emoji: '📣', desc: '负责折扣策划与竞价。', status: 'active', specialty: ['自动竞价', '裂变文案'], cognitiveWeight: 'DeepSeek-V3', promptsCount: 21 },
+        { role: '财务主管', name: 'Henry', emoji: '🏦', desc: '负责税务结算与审计。', status: 'active', specialty: ['税务合规', '多币种损益'], cognitiveWeight: 'DeepSeek-R1', promptsCount: 16 },
+        { role: '客服主管', name: 'Holly', emoji: '🗣️', desc: '负责参数解答与查询。', status: 'active', specialty: ['信息秒查', '多语沟通'], cognitiveWeight: 'GPT-4o-mini', promptsCount: 17 }
+      ]
+    }
+  ];
+
+  // --- KNOWLEDGE BASE DATA (Consolidated from KnowledgeBaseView) ---
+  const [kbFiles, setKbFiles] = useState([
+    { id: 'f1', name: '2026年服装电商小红书种草推广高点击率词汇黄金配方.docx', category: 'marketing', fileSize: '240 KB', uploadedAt: '2026-06-02 23:45', tokens: 15400 },
+    { id: 'f2', name: '摩登精品12大核心SKU面料精梳棉高支参数配方.pdf', category: 'product', fileSize: '1.2 MB', uploadedAt: '2026-06-02 23:30', tokens: 42000 },
+    { id: 'f3', name: '顺丰大兴一级保仓航空快递协议托运与退赔政策.pdf', category: 'operating', fileSize: '480 KB', uploadedAt: '2026-06-02 23:15', tokens: 18900 },
+    { id: 'f4', name: '2026年度多商铺损益分析与支付宝对账审计流程.pdf', category: 'corporate', fileSize: '850 KB', uploadedAt: '2026-06-02 21:00', tokens: 28400 },
+    { id: 'f5', name: '餐饮行业美团大众外卖折扣代金满减神券精算模版.xlsx', category: 'industry', fileSize: '180 KB', uploadedAt: '2026-06-02 18:30', tokens: 9200 }
+  ]);
+
+  const kbCategories = [
+    { id: 'all', name: '全部知识库', count: kbFiles.length },
+    { id: 'industry', name: '行业知识库', count: kbFiles.filter(f => f.category === 'industry').length },
+    { id: 'product', name: '产品知识库', count: kbFiles.filter(f => f.category === 'product').length },
+    { id: 'operating', name: '运营知识库', count: kbFiles.filter(f => f.category === 'operating').length },
+    { id: 'marketing', name: '营销知识库', count: kbFiles.filter(f => f.category === 'marketing').length },
+    { id: 'corporate', name: '企业知识库', count: kbFiles.filter(f => f.category === 'corporate').length }
+  ];
+
+  // --- INFRA LAYER DATA (Consolidated from SystemBaseView) ---
+  const [swaggerResponse, setSwaggerResponse] = useState<string>('【空闲中】等待执行 API 调用请求校验测试...');
+  const [isCallingAPI, setIsCallingAPI] = useState(false);
+  
+  const handleTestAPIEndpoint = (endpoint: string) => {
+    setIsCallingAPI(true);
+    setSwaggerResponse(`【调用中】POST ${endpoint} 对接握手建立。进行 RBAC 鉴权比对中...`);
+    setTimeout(() => {
+      setIsCallingAPI(false);
+      setSwaggerResponse(`【校验完成】200 OK
+Response Payload:
+{
+  "status": "success",
+  "requestId": "req_sh_92a9b${Math.floor(Math.random() * 90000) + 10000}cfff",
+  "timestamp": "2026-06-02 23:53:50 UTC",
+  "data": {
+    "authChecked": true,
+    "userRole": "AI_AGENT_AUTONOMOUS",
+    "allocatedHost": "https://pay.modaui.com/api/v1",
+    "envPort": 3000
+  }
+}`);
+    }, 1200);
+  };
 
   // --- REUSABLE SIMULATION STATES ---
   const [companies, setCompanies] = useState([
@@ -172,6 +600,7 @@ export default function PlatformAdminView({
 
   const [activeCapabilities, setActiveCapabilities] = useState({
     geminiFlow: true,
+    ollamaLocal: true,
     sfLogistics: true,
     stripeAccounting: true,
     wechatNotify: true,
@@ -192,13 +621,13 @@ export default function PlatformAdminView({
   ]);
 
   const [industryTemplates, setIndustryTemplates] = useState([
-    { code: 'clothing', name: '时尚服装快反模板', specialists: 6, nodeType: '高级工作流', rating: '9.8', apps: 420 },
-    { code: 'catering', name: '智慧餐饮外卖模板', specialists: 6, nodeType: '本地即开型', rating: '9.6', apps: 310 },
-    { code: 'goods', name: '跨境百货大宗模板', specialists: 6, nodeType: '多接口联动型', rating: '9.5', apps: 280 },
-    { code: 'beauty', name: '丽人美业沙龙模板', specialists: 5, nodeType: '预约卡券型', rating: '9.4', apps: 195 },
-    { code: 'fitness', name: '健身运动轻食模板', specialists: 5, nodeType: '社群裂变型', rating: '9.2', apps: 130 },
-    { code: 'jewelry', name: '高定珠宝极奢模板', specialists: 6, nodeType: '全真挂牌型', rating: '9.9', apps: 155 },
-    { code: 'home', name: '家居生活整装模板', specialists: 6, nodeType: '大件物流型', rating: '9.3', apps: 88 }
+    { code: 'fashion', name: '时尚服装快反模板', specialists: 6, nodeType: '高级工作流', rating: '9.8', apps: 420, templates: ['Vogue Luxe', 'Street Trend', 'Eco Minimal'] },
+    { code: 'catering', name: '智慧餐饮外卖模板', specialists: 6, nodeType: '本地即开型', rating: '9.6', apps: 310, templates: ['Michelin Dark', 'Insta-Bistro', 'Editorial Story'] },
+    { code: 'retail', name: '跨境百货大宗模板', specialists: 6, nodeType: '多接口联动型', rating: '9.5', apps: 280, templates: ['Global Market', 'Editorial Curated', 'Street Drop'] },
+    { code: 'beauty', name: '丽人美业沙龙模板', specialists: 5, nodeType: '预约卡券型', rating: '9.4', apps: 195, templates: ['Zen Spa', 'Glamour Studio', 'Luxury Clinic'] },
+    { code: 'fitness', name: '健身运动轻食模板', specialists: 5, nodeType: '社群裂变型', rating: '9.2', apps: 130, templates: ['Iron Core', 'Flow Yoga', 'Tech Wellness'] },
+    { code: 'jewelry', name: '高定珠宝极奢模板', specialists: 6, nodeType: '全真挂牌型', rating: '9.9', apps: 155, templates: ['Royal Heritage', 'Modern Carat', 'Editorial Showcase'] },
+    { code: 'home', name: '家居生活整装模板', specialists: 6, nodeType: '大件物流型', rating: '9.3', apps: 88, templates: ['Nordic Loft', 'Urban Chic', 'Modern Estate'] }
   ]);
 
   const [billingLogs, setBillingLogs] = useState([
@@ -221,13 +650,79 @@ export default function PlatformAdminView({
     { name: 'SF_EXPRESS_APP_ID', key: 'sf_exp_2026_speedy_key', hidden: true, host: '顺丰航空货运官仓' }
   ]);
 
+  const [agents, setAgents] = useState<any[]>([
+     { 
+       id: 'ag1', 
+       name: 'Aria', 
+       role: '设计师', 
+       avatar: '🎨', 
+       status: 'IDLE', 
+       model: 'GPT-4o', 
+       tokensUsed: 1200, 
+       temperature: 0.7, 
+       activeThreads: 0, 
+       memorySlots: 12, 
+       workspaceFiles: ['layout_canvas_cfg.json'], 
+       activeTask: '待命' 
+     },
+     { 
+       id: 'ag2', 
+       name: 'Barton', 
+       role: '采购经理', 
+       avatar: '👚', 
+       status: 'EXECUTING', 
+       model: 'Gemini Pro', 
+       tokensUsed: 2500, 
+       temperature: 0.4, 
+       activeThreads: 2, 
+       memorySlots: 8, 
+       workspaceFiles: ['supplier_contracts.db'], 
+       activeTask: '正在同步供应商库存' 
+     },
+     { 
+       id: 'ag3', 
+       name: 'Cyrus', 
+       role: '运营经理', 
+       avatar: '📈', 
+       status: 'IDLE', 
+       model: 'Claude 3.5', 
+       tokensUsed: 800, 
+       temperature: 0.5, 
+       activeThreads: 0, 
+       memorySlots: 16, 
+       workspaceFiles: ['roi_lever_optimizer.py'], 
+       activeTask: '待命' 
+     }
+   ]);
+
+  const [logs, setLogs] = useState<string[]>([]);
+  const addLog = (msg: string) => {
+    setLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 49)]);
+    setTaskLogs(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev.slice(0, 49)]);
+  };
+
   const [firewallActive, setFirewallActive] = useState<boolean>(true);
   const [rbacMatrix, setRbacMatrix] = useState<Record<string, Record<string, boolean>>>({
-    SUPER_ADMIN: { READ: true, WRITE: true, DESTROY: true },
-    TENANT_OWNER: { READ: true, WRITE: true, DESTROY: false },
-    AI_SPECIALIST: { READ: true, WRITE: true, DESTROY: false },
-    GUEST_CLIENT: { READ: true, WRITE: false, DESTROY: false }
+    admin: { all: true },
+    founder: { merchant_manage: true, store_manage: true, product_manage: true, order_manage: true, finance_read: true },
+    manager: { store_manage: true, product_manage: true, order_manage: true },
+    staff: { order_manage: true, product_read: true },
+    customer: { shop_view: true, cart_manage: true, order_create: true }
   });
+
+  useEffect(() => {
+    const loadRbac = async () => {
+      try {
+        const docSnap = await getDoc(doc(db!, 'system', 'rbac_config'));
+        if (docSnap.exists() && docSnap.data().matrix) {
+          setRbacMatrix(docSnap.data().matrix);
+        }
+      } catch (e) {
+        console.error("Failed to load RBAC from cloud:", e);
+      }
+    };
+    loadRbac();
+  }, []);
 
   const [telemetryTime, setTelemetryTime] = useState<string>('');
   const [chartData, setChartData] = useState<Array<{time: string; reqs: number}>>([
@@ -245,6 +740,33 @@ export default function PlatformAdminView({
     { sender: 'ai', text: '您好！我是平台运维协同智脑。当前总控制台 8 大子系统已无缝接入底层。请问需要执行什么指令？', time: '2026-06-04 03:25' }
   ]);
   const [inputText, setInputText] = useState('');
+  const [databaseJson, setDatabaseJson] = useState<any>(null);
+  const [isLoadingDb, setIsLoadingDb] = useState(false);
+
+  // Fetch local database content
+  const fetchDatabase = async () => {
+    setIsLoadingDb(true);
+    try {
+      const sessionId = localStorage.getItem('platform_admin_session') || '';
+      const resp = await fetch('/api/admin/db', {
+        headers: { 'Authorization': sessionId }
+      });
+      const result = await resp.json();
+      if (result.success) {
+        setDatabaseJson(result.data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch database:", e);
+    } finally {
+      setIsLoadingDb(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'database') {
+      fetchDatabase();
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     setTelemetryTime(new Date().toUTCString());
@@ -298,18 +820,87 @@ export default function PlatformAdminView({
     setCompanyAudits(companyAudits.filter(a => a.id !== id));
   };
 
-  const toggleRbac = (role: string, right: string) => {
-    setRbacMatrix(prev => ({
-      ...prev,
+  const toggleRbac = async (role: string, right: string) => {
+    const newValue = !rbacMatrix[role][right];
+    const newMatrix = {
+      ...rbacMatrix,
       [role]: {
-        ...prev[role],
-        [right]: !prev[role][right]
+        ...rbacMatrix[role],
+        [right]: newValue
       }
-    }));
+    };
+    setRbacMatrix(newMatrix);
+    
+    // PERSIST TO FIRESTORE
+    try {
+      await setDoc(doc(db!, 'system', 'rbac_config'), {
+        matrix: newMatrix,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (e) {
+      console.error("Failed to sync RBAC to cloud:", e);
+    }
   };
 
   const toggleKeyVisibility = (name: string) => {
     setApiKeys(prev => prev.map(k => k.name === name ? { ...k, hidden: !k.hidden } : k));
+  };
+
+  // Missing functions found in linter errors
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [isSpawning, setIsSpawning] = useState(false);
+  const [spawnKeyword, setSpawnKeyword] = useState('');
+  const [spawnedAI, setSpawnedAI] = useState<any>(null);
+  const [simLogs, setSimLogs] = useState<any[]>([]);
+  
+  // --- AI SPAWNING LOGIC ---
+  const handleSpawnAI = async () => {
+    if (!spawnKeyword.trim()) return;
+    setIsSpawning(true);
+    setSpawnedAI(null);
+    
+    try {
+      const prompt = `Generate a JSON object for a professional AI specialist based on the keyword: "${spawnKeyword}". 
+      Return ONLY valid JSON with fields: name (Chinese), role (Chinese), emoji, desc (short Chinese), specialty (array of 3 skills), cognitiveWeight (e.g. GPT-4o, Llama3). 
+      Make it professional for an enterprise operations system.`;
+      
+      const response = await generateWithOllama(prompt, "llama3.1:8b");
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const aiData = JSON.parse(jsonMatch[0]);
+        setSpawnedAI(aiData);
+      }
+    } catch (e) {
+      console.error("Spawn Error:", e);
+      setSpawnedAI({
+        name: "智脑助手",
+        role: "通用执行官",
+        emoji: "🤖",
+        desc: "本地算力响应异常，已切换至基础智体模型。",
+        specialty: ["任务处理", "逻辑推理", "基础问答"],
+        cognitiveWeight: "Local-Base"
+      });
+    } finally {
+      setIsSpawning(false);
+    }
+  };
+
+  const runCoCollaborationSim = () => {
+    setIsSimulating(true);
+    const now = new Date().toLocaleTimeString();
+    setSimLogs([
+      { id: 1, emoji: '🎨', sender: 'Aria', time: now, type: 'aria', message: '正在解析多租户行业意向，准备生成文案资产...' },
+      { id: 2, emoji: '📦', sender: 'Barton', time: now, type: 'barton', message: '已锁定供应商库存，正在执行自动竞价逻辑。' }
+    ]);
+    
+    setTimeout(() => {
+      const nextTime = new Date().toLocaleTimeString();
+      setSimLogs(prev => [
+        ...prev,
+        { id: 3, emoji: '🚀', sender: 'System', time: nextTime, type: 'system', message: '协作成功！所有智体已就位并完成流水同步。' }
+      ]);
+      setIsSimulating(false);
+    }, 2500);
   };
 
   // SUGGESTION CLICK TRIGGER LOGIC
@@ -388,17 +979,27 @@ export default function PlatformAdminView({
         {/* 8 Core Navigation Items */}
         <nav className="flex-1 py-4 space-y-1 overflow-y-auto scrollbar-none">
           <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider block mb-2 px-3 font-mono">
-            主控页面
+            主控
           </span>
           {[
-            { id: 'overview', label: '控制台总览', icon: BarChart3 },
+            { id: 'overview', label: '控制台', icon: BarChart3 },
             { id: 'company', label: '企业管理', icon: Building2 },
+            { id: 'ops', label: '运营文档', icon: Terminal },
             { id: 'ai', label: '智体调度', icon: Cpu },
+            { id: 'ecc', label: 'ECC 智控', icon: ShieldCheck },
             { id: 'task', label: '任务流水', icon: Workflow },
             { id: 'template', label: '行业模板', icon: LayoutTemplate },
+            { id: 'app_store', label: '应用市场', icon: ShoppingBag },
+            { id: 'theme', label: '主题商店', icon: Layout },
+            { id: 'lva', label: '视频智体', icon: Video },
+            { id: 'knowledge', label: '知识库', icon: BookOpen },
             { id: 'finance', label: '财务记账', icon: Coins },
             { id: 'user', label: '用户账号', icon: Users },
-            { id: 'system', label: '系统设置', icon: Settings }
+            { id: 'support', label: '客户支持', icon: Headphones },
+            { id: 'database', label: '数据库', icon: Database },
+            { id: 'infra', label: '系统底层', icon: Activity },
+            { id: 'settings', label: '全局设置', icon: Sliders },
+            { id: 'system', label: '系统安全', icon: Lock }
           ].map(item => {
             const Icon = item.icon;
             const isSelected = activeTab === item.id;
@@ -532,8 +1133,9 @@ export default function PlatformAdminView({
                 <span>管理系统</span>
                 <ChevronRight className="w-3 h-3" />
                 <span className="text-blue-400">
-                  {activeTab === 'overview' && '控制台总览'}
+                  {activeTab === 'overview' && '控制台'}
                   {activeTab === 'company' && '企业管理'}
+                  {activeTab === 'ops' && '运营文档'}
                   {activeTab === 'ai' && '智体调度'}
                   {activeTab === 'task' && '任务流水'}
                   {activeTab === 'template' && '行业模板'}
@@ -542,11 +1144,11 @@ export default function PlatformAdminView({
                   {activeTab === 'system' && '系统设置'}
                 </span>
                 <span className="mx-2 select-none text-zinc-700">&bull;</span>
-                <span className="text-[10px] text-zinc-500">负责人: {currentSpecialist.name.split(' ').pop()}</span>
+                <span className="text-[10px] text-zinc-500">执勤: {currentSpecialist.name}</span>
               </div>
               <h2 className="text-sm font-extrabold text-white mt-0.5 flex items-center gap-1.5 font-sans uppercase tracking-wider">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                <span>MODAUI 统合总后台</span>
+                <span>MODAUI 总后台</span>
               </h2>
             </div>
           </div>
@@ -590,672 +1192,338 @@ export default function PlatformAdminView({
 
               {/* ----------------- 1. 总览 / OVERVIEW ----------------- */}
               {activeTab === 'overview' && (
-                <div className="space-y-6 animate-fade-in text-[#E8EAED]">
-                  
-                  {/* Dynamic Sub-header Info */}
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-550 bg-blue-500" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-450 font-mono">
-                        安全设置 / 接口配置
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Multi-Nested Sub tabs strip */}
-                  <div className="flex border-b border-zinc-800/80 pb-3 gap-6 text-xs text-zinc-400 font-bold overflow-x-auto scrollbar-none">
-                    <span className="text-blue-400 cursor-pointer border-b-2 border-blue-500 pb-3 px-2 pr-4 shrink-0 font-sans">金融总览</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">流量池分配</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">API流控监测</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">多活异地热备</span>
-                  </div>
-                  
-                  {/* Metric items overview */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    {[
-                      { label: '总余额 (USD)', val: '0.00', unit: '+12% 较上月同期', color: 'text-emerald-400' },
-                      { label: '今日收入', val: '0.00', unit: '+5% 较上月同期', color: 'text-emerald-400' },
-                      { label: '累计提现', val: '$45,000.00', unit: '稳定 较上月同期', color: 'text-blue-400', isLarge: true },
-                      { label: '在线算力容器', val: companies.length * 6, unit: '主实例 较上月同期', color: 'text-indigo-400' }
-                    ].map((m, idx) => (
-                      <div key={idx} className="bg-zinc-950 border border-zinc-800/82 p-4 rounded-xl shadow-2xl flex flex-col justify-between hover:border-zinc-700 transition">
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
-                          {m.label}
-                        </span>
-                        <div className={`text-xl md:text-2xl font-black font-mono tracking-tight my-2.5 ${m.color}`}>
-                          {m.val}
-                        </div>
-                        <span className="text-[9px] text-[#8B949E] font-mono leading-none block font-semibold">
-                          {m.unit}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Trends Graph and Core status */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    <div className="lg:col-span-2 bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                      <div className="flex items-center justify-between pb-3 border-b border-zinc-800/80">
-                        <div>
-                          <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">租户并发调度流趋势 (Avg QPS)</h3>
-                        </div>
-                        <span className="text-[10px] font-bold text-blue-400 bg-blue-950/40 border border-blue-900/30 rounded-full px-2.5 py-1 flex items-center gap-1 font-mono">
-                          <TrendingUp className="w-3 h-3" />
-                          <span>380 QPS Active</span>
-                        </span>
-                      </div>
-
-                      <div style={{ width: '100%', height: 210 }}>
-                        <ResponsiveContainer>
-                          <AreaChart data={chartData}>
-                            <defs>
-                              <linearGradient id="reqGradient" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.25}/>
-                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <XAxis dataKey="time" stroke="#52525b" fontSize={9} tickLine={false} />
-                            <Tooltip contentStyle={{ background: '#09090b', borderColor: '#2f3336', fontSize: 11, color: '#e8eaed' }} />
-                            <Area type="monotone" dataKey="reqs" stroke="#3b82f6" fillOpacity={1} fill="url(#reqGradient)" strokeWidth={2} />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-
-                    {/* Right column list of servers statuses */}
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4 flex flex-col justify-between">
-                      <div>
-                        <div className="pb-3 border-b border-zinc-800/80 flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#8B949E] uppercase tracking-widest font-mono">系统统合微服务栈</span>
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        </div>
-                        
-                        <div className="space-y-2.5 mt-4 text-xs font-mono">
-                          {[
-                            { name: '多租户网关代理层', desc: '正常分发', code: 'GATEWAY_OK' },
-                            { name: 'Gemini-3.5 API 服务层', desc: '100% SLA', code: 'API_STABLE' },
-                            { name: '顺丰物流直连 API', desc: '8ms延时', code: 'SF_CONNECTED' },
-                            { name: 'Stripe多币对平准池', desc: '就绪在线', code: 'PAY_PROXIED' }
-                          ].map((sys, idx) => (
-                            <div key={idx} className="flex justify-between items-center bg-zinc-950 border border-zinc-800/60 p-2.5 rounded-lg hover:border-zinc-700 transition">
-                              <div>
-                                <span className="font-bold text-slate-200 block text-[11px]">{sys.name}</span>
-                                <span className="text-[9px] text-[#8B949E] select-none block mt-0.5">{sys.code}</span>
-                              </div>
-                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-2 py-0.5 rounded">
-                                {sys.desc}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-
+                <div className="space-y-6">
+                  <StoreCountCard />
+                  <PlatformAnalytics />
                 </div>
               )}
 
               {/* ----------------- 2. 公司中心 / COMPANY CENTER ----------------- */}
               {activeTab === 'company' && (
-                <div className="space-y-6 text-[#E8EAED]">
-                  
-                  {/* Nested title and director info */}
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                        企业名录及准入配置
-                      </span>
-                    </div>
-                  </div>
+                <TenantManagement 
+                  shops={companies.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    industry: c.industry.includes('服装') ? 'fashion' : 
+                             c.industry.includes('餐饮') ? 'catering' : 
+                             c.industry.includes('百货') ? 'retail' : 
+                             c.industry.includes('美业') ? 'beauty' : 
+                             c.industry.includes('健身') ? 'fitness' : 'jewelry',
+                    founderEmail: 'admin@modaui.com',
+                    planLevel: c.plan.includes('企业') ? 'Enterprise' : c.plan.includes('专业') ? 'Pro' : 'Trial',
+                    dailyTokens: 50000,
+                    cpuQuota: '2.0 Cores',
+                    totalSalesSimulated: 0,
+                    status: c.status === '运行中' ? 'active' : 'suspended'
+                  })) as any}
+                  onUpdateShops={(newShops) => {
+                    setCompanies(newShops.map(s => ({
+                      id: s.id,
+                      name: s.name,
+                      industry: s.industry === 'fashion' ? '服装快反' : 
+                               s.industry === 'catering' ? '餐饮外卖' : 
+                               s.industry === 'retail' ? '跨境百货' : 
+                               s.industry === 'beauty' ? '美业沙龙' : 
+                               s.industry === 'fitness' ? '运动健身' : '高定珠宝',
+                      plan: s.planLevel === 'Enterprise' ? '企业尊享版' : s.planLevel === 'Pro' ? '专业高级版' : '新手体验版',
+                      status: s.status === 'active' ? '运行中' : '已挂起',
+                      specialistCount: 6,
+                      billingCycle: '2026-06'
+                    })));
+                  }}
+                />
+              )}
 
-                  {/* Sub navigations */}
-                  <div className="flex border-b border-zinc-800/80 pb-3 gap-6 text-xs text-zinc-400 font-bold overflow-x-auto scrollbar-none">
-                    <span 
-                      onClick={() => setSelectedSubTab('all')} 
-                      className={`cursor-pointer pb-3 px-2 shrink-0 ${selectedSubTab === 'all' ? 'text-blue-400 border-b-2 border-blue-500' : 'hover:text-white'}`}
-                    >
-                      注册企业主库 ({companies.length})
-                    </span>
-                    <span 
-                      onClick={() => setSelectedSubTab('audits')} 
-                      className={`cursor-pointer pb-3 px-2 shrink-0 ${selectedSubTab === 'audits' ? 'text-blue-400 border-b-2 border-blue-500' : 'hover:text-white'}`}
-                    >
-                      待开立审批单 ({companyAudits.length})
-                    </span>
-                    <span 
-                      onClick={() => setSelectedSubTab('templates')} 
-                      className={`cursor-pointer pb-3 px-2 shrink-0 ${selectedSubTab === 'templates' ? 'text-blue-400 border-b-2 border-blue-500' : 'hover:text-white'}`}
-                    >
-                      行业智脑预置
-                    </span>
-                    <span 
-                      onClick={() => setSelectedSubTab('subscriptions')} 
-                      className={`cursor-pointer pb-3 px-2 shrink-0 ${selectedSubTab === 'subscriptions' ? 'text-blue-400 border-b-2 border-blue-500' : 'hover:text-white'}`}
-                    >
-                      租户结算控制柜
-                    </span>
-                  </div>
-
-                  {/* Dynamic Render SubTab contents */}
-                  {selectedSubTab === 'all' && (
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                      <div className="overflow-x-auto border border-zinc-800/60 rounded-xl bg-zinc-950/40">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead>
-                            <tr className="bg-zinc-950 text-[#8B949E] font-mono border-b border-zinc-800/80">
-                              <th className="p-3.5">注册编号</th>
-                              <th className="p-3.5">公司名称</th>
-                              <th className="p-3.5">关联产业分类</th>
-                              <th className="p-3.5">订阅算力套餐</th>
-                              <th className="p-3.5">AI专家岗位数</th>
-                              <th className="p-3.5">状态</th>
-                              <th className="p-3.5 text-right">单兵指令</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-900 text-zinc-300 font-mono">
-                            {companies.map(corp => (
-                              <tr key={corp.id} className="hover:bg-zinc-900/30 transition">
-                                <td className="p-3.5 font-bold text-white">{corp.id}</td>
-                                <td className="p-3.5 font-sans font-bold text-white">{corp.name}</td>
-                                <td className="p-3.5 text-[#8B949E]">{corp.industry}</td>
-                                <td className="p-3.5 text-indigo-400 font-bold">{corp.plan}</td>
-                                <td className="p-3.5 text-zinc-400">{corp.specialistCount} 智体值班</td>
-                                <td className="p-3.5">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    corp.status === '运行中' ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-900/30' : 'bg-rose-950/50 text-rose-400 border border-rose-900/30'
-                                  }`}>
-                                    {corp.status}
-                                  </span>
-                                </td>
-                                <td className="p-3.5 text-right">
-                                  <button
-                                    onClick={() => setCompanies(companies.map(c => c.id === corp.id ? { ...c, status: c.status === '运行中' ? '已挂起' : '运行中' } : c))}
-                                    className={`text-[10px] px-2.5 py-1 rounded font-bold cursor-pointer transition ${
-                                      corp.status === '运行中' ? 'bg-rose-950/40 text-rose-400 border border-rose-900/30 hover:bg-rose-950' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30 hover:bg-emerald-950'
-                                    }`}
-                                  >
-                                    {corp.status === '运行中' ? '暂停' : '重启'}
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedSubTab === 'audits' && (
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                      {companyAudits.length === 0 ? (
-                        <div className="text-[#8B949E] font-mono text-center py-10 italic">
-                          暂无最新待审批企业 [No applicants pending approval]
+              {activeTab === 'ops' && (
+                <div className="space-y-6">
+                  <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+                    <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 space-y-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold text-white">运营控制面板</h3>
+                          <p className="text-sm text-neutral-400">管理租户、渠道同步、行业模板和运营文档。</p>
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {companyAudits.map(item => (
-                            <div key={item.id} className="bg-zinc-950 border border-zinc-800/60 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                              <div className="font-mono text-xs">
-                                <span className="font-bold text-white block text-[13px]">{item.name}</span>
-                                <span className="text-[#8B949E] mt-1.5 block leading-relaxed">
-                                  关联垂直大类: <strong className="text-blue-400">{item.industry}</strong> &bull; 申请代理人: <strong>{item.contact}</strong> &bull; 提交时间: <strong>{item.time}</strong>
-                                </span>
-                              </div>
-                              <div className="flex gap-2 shrink-0">
-                                <button
-                                  onClick={() => handleAuditAction(item.id, 'approve')}
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10.5px] font-bold font-mono px-3.5 py-1.5 rounded-lg transition cursor-pointer shadow-md shadow-emerald-500/10"
-                                >
-                                  核准备案
-                                </button>
-                                <button
-                                  onClick={() => handleAuditAction(item.id, 'reject')}
-                                  className="bg-neutral-800 hover:bg-neutral-700 text-[#8B949E] hover:text-white text-[10.5px] font-bold font-mono px-3.5 py-1.5 rounded-lg border border-zinc-700/50 transition cursor-pointer"
-                                >
-                                  驳回排审
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {selectedSubTab === 'templates' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {industryTemplates.map(item => (
-                        <div key={item.code} className="bg-zinc-950 rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4 hover:border-zinc-700 transition">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-bold text-white text-[13px]">{item.name}</h4>
-                              <span className="text-[10px] font-semibold font-mono text-blue-400 mt-1 block">{item.nodeType}</span>
-                            </div>
-                            <span className="text-xs bg-amber-950/40 text-amber-400 border border-amber-900/30 font-mono font-bold px-1.5 py-0.5 rounded">
-                              ★ {item.rating}
-                            </span>
-                          </div>
-                          
-                          <div className="flex justify-between text-[11px] font-mono pt-3 border-t border-zinc-900">
-                            <span className="text-zinc-400">专家库: <strong className="text-white">{item.specialists}位</strong></span>
-                            <span className="text-[#8B949E]">实例量: <strong className="text-white">{item.apps}</strong></span>
-                          </div>
-
-                          <button 
-                            onClick={() => handleSuggestionClick(`重新部署 ${item.name} 提示词模板`)}
-                            className="w-full bg-[#09090B] border border-zinc-800/80 hover:bg-neutral-900 text-white hover:text-blue-300 rounded-lg text-xs font-bold py-2 font-mono transition cursor-pointer"
-                          >
-                            刷准微调认知权
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {selectedSubTab === 'subscriptions' && (
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                      <div className="flex justify-between items-center pb-2 border-b border-zinc-900">
-                        <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">多租户算力包计费阀</h3>
-                        <button 
-                          onClick={() => alert('已成功与 Stripe CLI 钩子握手，新增套餐在 AGENTS.md 完成声明后即可挂载。')}
-                          className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-mono px-3.5 py-1.5 rounded-lg transition cursor-pointer"
+                        <button
+                          onClick={refreshTenantData}
+                          className="text-xs uppercase tracking-[0.18em] px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition"
                         >
-                          + 新增算力资费包
+                          刷新数据
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-                        {[
-                          { name: '新手体验配额 Package Mini', price: '￥119', tokens: '100k/月', disc: '0.90x 算力消耗系数' },
-                          { name: '专业高阶配额 Package Pro', price: '￥349', tokens: '800k/月', disc: '0.85x 算力消耗系数' },
-                          { name: '无限大宗尊享 Package Ultra', price: '￥1,299', tokens: '无限吞吐量', disc: '0.75x 算力消耗系数' }
-                        ].map((pkg, idx) => (
-                          <div key={idx} className="bg-zinc-950 border border-zinc-800/60 rounded-xl p-5 space-y-3">
-                            <span className="text-[11px] font-bold text-[#8B949E] uppercase block tracking-wider font-mono">{pkg.name}</span>
-                            <div className="text-2xl font-mono font-black text-white">
-                              {pkg.price} <small className="text-xs font-normal text-zinc-500">/月</small>
-                            </div>
-                            <div className="text-[10.5px] font-mono text-zinc-400 space-y-1.5 pt-3 border-t border-zinc-900">
-                              <div>流量额度上限: <strong className="text-blue-400">{pkg.tokens}</strong></div>
-                              <div>扣费比率平准: <strong className="text-emerald-400">{pkg.disc}</strong></div>
-                            </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">租户总览</span>
+                            <span className="text-xs text-slate-400">{tenantList.length} 个租户</span>
                           </div>
-                        ))}
+                          <div className="space-y-3">
+                            {tenantList.slice(0, 4).map(tenant => (
+                              <div key={tenant.id} className="flex items-center justify-between gap-3 text-sm text-slate-200">
+                                <div>
+                                  <div className="font-semibold">{tenant.name || tenant.id}</div>
+                                  <div className="text-xs text-slate-500">{tenant.billingStatus || tenant.status || 'active'}</div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleSuspendTenant(tenant.id, tenant.status !== 'suspended')}
+                                    className="text-xs text-rose-300 hover:text-white"
+                                  >{tenant.status === 'suspended' ? '恢复' : '挂起'}</button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedTenantId(tenant.id);
+                                      setTenantQuotaInput(Number(tenant.quotaLimit || tenant.quota || 0));
+                                    }}
+                                    className="text-xs text-slate-400 hover:text-white"
+                                  >选中</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">当前激活租户</span>
+                            <span className="text-xs text-slate-400">{selectedTenantId || '未选择'}</span>
+                          </div>
+                          <select
+                            value={selectedTenantId}
+                            onChange={(e) => setSelectedTenantId(e.target.value)}
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                          >
+                            {tenantList.map((tenant) => (
+                              <option key={tenant.id} value={tenant.id}>{tenant.name || tenant.id}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">租户配额调整</span>
+                            <span className="text-xs text-slate-400">当前: {tenantQuotaInput}</span>
+                          </div>
+                          <input
+                            type="number"
+                            value={tenantQuotaInput}
+                            onChange={(e) => setTenantQuotaInput(Number(e.target.value))}
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                            placeholder="输入新的配额"
+                          />
+                          <button
+                            onClick={handleUpdateTenantQuota}
+                            className="mt-3 w-full rounded-3xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-500 transition"
+                          >{opLoading ? '提交中...' : '更新租户配额'}</button>
+                          <p className="mt-3 text-xs text-slate-400">{auditMessage || '租户配额变更将在平台账务系统中生效。'}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-3">
+                        <button
+                          onClick={handleInstallTemplate}
+                          className="rounded-3xl border border-blue-500/30 bg-blue-600/10 text-blue-200 px-4 py-3 text-sm font-semibold hover:bg-blue-600/15 transition"
+                        >
+                          预装行业模板
+                        </button>
+                        <button
+                          onClick={handleSyncOrders}
+                          className="rounded-3xl border border-emerald-500/30 bg-emerald-600/10 text-emerald-200 px-4 py-3 text-sm font-semibold hover:bg-emerald-600/15 transition"
+                        >渠道订单同步</button>
+                        <button
+                          onClick={handleCreateAuditLog}
+                          className="rounded-3xl border border-slate-500/30 bg-slate-700/10 text-slate-200 px-4 py-3 text-sm font-semibold hover:bg-slate-700/20 transition"
+                        >发布变更审计</button>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">模板行业</span>
+                          </div>
+                          <select
+                            value={templateInstallIndustry}
+                            onChange={(e) => setTemplateInstallIndustry(e.target.value as any)}
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                          >
+                            <option value="fashion">服装</option>
+                            <option value="catering">餐饮</option>
+                            <option value="beauty">美业</option>
+                            <option value="fitness">健身</option>
+                            <option value="jewelry">珠宝</option>
+                            <option value="retail">百货</option>
+                          </select>
+                        </div>
+                        <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">当前操作</span>
+                          </div>
+                          <p className="text-sm text-slate-200 min-h-[64px]">{opMessage}</p>
+                        </div>
+                        <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-xs uppercase tracking-[0.18em] text-slate-500">租户配额</span>
+                          </div>
+                          <div className="space-y-3">
+                            <p className="text-sm text-slate-400">选中租户的当前配额可在此处调整并写入平台计费系统。</p>
+                            <input
+                              type="number"
+                              value={tenantQuotaInput}
+                              onChange={(e) => setTenantQuotaInput(Number(e.target.value))}
+                              className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                              placeholder="输入新的配额"
+                            />
+                            <button
+                              onClick={handleUpdateTenantQuota}
+                              className="rounded-3xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-500 transition"
+                            >{opLoading ? '提交中...' : '更新租户配额'}</button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
 
+                    <div className="space-y-6">
+                      <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-6">
+                        <h3 className="text-lg font-bold text-white">运营文档写入</h3>
+                        <p className="text-sm text-slate-400">将关键运维说明、租户流程和AI调度文档写入平台数据库。</p>
+                        <div className="mt-5 space-y-4">
+                          <input
+                            type="text"
+                            value={docTitle}
+                            onChange={(e) => setDocTitle(e.target.value)}
+                            placeholder="文档标题"
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                          />
+                          <textarea
+                            value={docContent}
+                            onChange={(e) => setDocContent(e.target.value)}
+                            rows={6}
+                            placeholder="文档内容..."
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                          />
+                          <input
+                            type="text"
+                            value={docTags}
+                            onChange={(e) => setDocTags(e.target.value)}
+                            placeholder="标签, 例如: 审计, 订单, 模板"
+                            className="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-blue-500"
+                          />
+                          <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+                            <span className="text-xs text-slate-400">{docSaveStatus}</span>
+                            <button
+                              onClick={createOperationalDocument}
+                              className="rounded-3xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-500 transition"
+                            >{opLoading ? '保存中...' : '保存文档'}</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-3xl bg-[#08080A] border border-[#2F3336] p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="text-lg font-bold text-white">最近运营文档</h3>
+                            <p className="text-sm text-slate-400">直接读取并展示已入库的文档记录。</p>
+                          </div>
+                          <button
+                            onClick={refreshTenantData}
+                            className="text-xs uppercase tracking-[0.18em] px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:bg-slate-700 transition"
+                          >刷新列表</button>
+                        </div>
+                        <div className="space-y-3">
+                          {operationDocs.slice(0, 5).map((doc) => (
+                            <div key={doc.id} className="rounded-2xl border border-[#2F3336] p-4 bg-[#070708]">
+                              <div className="flex items-center justify-between gap-3">
+                                <div>
+                                  <h4 className="text-sm font-semibold text-white">{doc.title}</h4>
+                                  <p className="text-xs text-slate-500">{doc.createdBy} · {new Date(doc.createdAt).toLocaleString()}</p>
+                                </div>
+                                <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-400">{doc.tenantId}</span>
+                              </div>
+                              <p className="mt-3 text-sm text-slate-300 line-clamp-3">{doc.content}</p>
+                            </div>
+                          ))}
+                          {!operationDocs.length && (
+                            <div className="text-sm text-slate-500">暂无运营文档，使用上方表单创建第一条。</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* ----------------- 3. AI中心 / AI CENTER ----------------- */}
+              {/* ----------------- 3. 智体调度 / AI DISPATCH ----------------- */}
               {activeTab === 'ai' && (
                 <div className="space-y-6 text-[#E8EAED]">
-                  
                   <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
                     <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
                       <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                        智能智脑配重控制台
+                        智体总控
                       </span>
                     </div>
+                    <button 
+                      onClick={() => setActiveTab('ecc')}
+                      className="text-[10px] bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 px-3 py-1 rounded font-bold hover:bg-indigo-600/30 transition"
+                    >
+                      进入 ECC 智控中心
+                    </button>
                   </div>
-
-                  {/* Sub Navigations */}
-                  <div className="flex border-b border-zinc-800/80 pb-3 gap-6 text-xs text-zinc-400 font-bold overflow-x-auto scrollbar-none">
-                    <span className="text-blue-400 cursor-pointer border-b-2 border-blue-500 pb-3 px-2 pr-4 shrink-0 font-sans">智德岗位标准智能</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">自动限速调优机制</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans font-mono animate-pulse">SLA 熔断状态: STABLE</span>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    {/* Left Panel: Specialists */}
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4 lg:col-span-1">
-                      <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">注册岗位岗位配重</h3>
-                      <div className="space-y-3 font-mono">
-                        {specialists.map((sp, idx) => (
-                          <div key={idx} className="bg-zinc-950 border border-zinc-800/60 p-3 rounded-lg flex flex-col justify-between">
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="font-bold text-white">{sp.role}</span>
-                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/40 border border-[#2F3336]/60 px-1.5 py-0.5 rounded">
-                                {sp.state}
-                              </span>
-                            </div>
-                            <p className="text-[10px] text-zinc-400 mt-1 leading-normal font-sans">
-                              {sp.spec}
-                            </p>
-                            <div className="flex justify-between items-center text-[9.5px] text-zinc-500 mt-2 border-t border-zinc-900 pt-1.5">
-                              <span>认知算力占比:</span>
-                              <strong className="text-blue-400">{sp.weight}%</strong>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Right Panel: Capabilities sliders and metadata */}
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4 lg:col-span-2">
-                      <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">API Capability Modules</h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        
-                        <div className="p-4 bg-zinc-950 border border-zinc-800/60 rounded-xl space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-white">Gemini-3.5 智能工作流调度</span>
-                            <input
-                              type="checkbox"
-                              checked={activeCapabilities.geminiFlow}
-                              onChange={() => setActiveCapabilities({ ...activeCapabilities, geminiFlow: !activeCapabilities.geminiFlow })}
-                              className="accent-blue-500 rounded cursor-pointer w-4 h-4"
-                            />
-                          </div>
-                          <p className="text-[10.5px] text-zinc-400 leading-normal">
-                            自动调度多智能间的DAG串行网络，切断退回手动顺序触发。
-                          </p>
-                        </div>
-
-                        <div className="p-4 bg-zinc-950 border border-zinc-800/60 rounded-xl space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-white">顺丰一键航空物流履单 API</span>
-                            <input
-                              type="checkbox"
-                              checked={activeCapabilities.sfLogistics}
-                              onChange={() => setActiveCapabilities({ ...activeCapabilities, sfLogistics: !activeCapabilities.sfLogistics })}
-                              className="accent-blue-500 rounded cursor-pointer w-4 h-4"
-                            />
-                          </div>
-                          <p className="text-[10.5px] text-zinc-400 leading-normal">
-                            SF Express Airway direct broker callback broker listener status.
-                          </p>
-                        </div>
-
-                        <div className="p-4 bg-zinc-950 border border-zinc-800/60 rounded-xl space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-white">Stripe/微信多币结算平准契</span>
-                            <input
-                              type="checkbox"
-                              checked={activeCapabilities.stripeAccounting}
-                              onChange={() => setActiveCapabilities({ ...activeCapabilities, stripeAccounting: !activeCapabilities.stripeAccounting })}
-                              className="accent-blue-500 rounded cursor-pointer w-4 h-4"
-                            />
-                          </div>
-                          <p className="text-[10.5px] text-zinc-400 leading-normal">
-                            支付入账后的算力扣减对账、租户年度账期损益核销。
-                          </p>
-                        </div>
-
-                        <div className="p-4 bg-zinc-950 border border-zinc-800/60 rounded-xl space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-white">竞价直通车智能裂变宣发</span>
-                            <input
-                              type="checkbox"
-                              checked={activeCapabilities.autoAdvertising}
-                              onChange={() => setActiveCapabilities({ ...activeCapabilities, autoAdvertising: !activeCapabilities.autoAdvertising })}
-                              className="accent-blue-500 rounded cursor-pointer w-4 h-4"
-                            />
-                          </div>
-                          <p className="text-[10.5px] text-zinc-400 leading-normal">
-                            在小红书、抖音及大众美团进行智能化广告竞价调优阻。
-                          </p>
-                        </div>
-
-                      </div>
-
-                      {/* Cost monitoring block */}
-                      <div className="bg-zinc-950 rounded-xl p-4 font-mono text-xs text-blue-300 space-y-2.5 border border-zinc-850">
-                        <span className="text-zinc-500 uppercase tracking-wider block text-[9px]">算力总成本精调比率</span>
-                        <div className="grid grid-cols-3 gap-2 text-center pt-2.5 border-t border-zinc-900 text-[11px]">
-                          <div>
-                            <span className="text-zinc-500 block">SaaS 总流水月</span>
-                            <span className="text-white font-bold">￥157,750</span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 block">API算力API扣减</span>
-                            <span className="text-amber-400 font-bold">￥31,420</span>
-                          </div>
-                          <div>
-                            <span className="text-zinc-500 block">算利润率 (Spread)</span>
-                            <span className="text-emerald-400 font-bold">80.08% SLA</span>
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                  </div>
-
+                  
+                  <ECCAgentConsole 
+                    agents={agents}
+                    onAddLog={addLog}
+                    onUpdateAgentTask={(id, newTask) => {
+                      setAgents(prev => prev.map(a => a.id === id ? { ...a, activeTask: newTask } : a));
+                    }}
+                  />
                 </div>
               )}
 
-              {/* ----------------- 4. 任务中心 / TASK CENTER ----------------- */}
+              {/* ----------------- 3.5 ECC 智控 / ECC CONSOLE ----------------- */}
+              {activeTab === 'ecc' && (
+                <ECCAgentConsole 
+                  agents={agents}
+                  onAddLog={addLog}
+                  onUpdateAgentTask={(id, newTask) => {
+                    setAgents(prev => prev.map(a => a.id === id ? { ...a, activeTask: newTask } : a));
+                  }}
+                />
+              )}
+
+              {/* ----------------- 4. 任务流水 / TASK WORKFLOW ----------------- */}
               {activeTab === 'task' && (
-                <div className="space-y-6 text-[#E8EAED]">
-                  
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-450 font-mono">
-                        运行断点调试控制器
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Nested Tab Sub headings */}
-                  <div className="flex border-b border-zinc-800/80 pb-3 gap-6 text-xs text-zinc-400 font-bold overflow-x-auto scrollbar-none">
-                    <span className="text-blue-400 cursor-pointer border-b-2 border-blue-500 pb-3 px-2 pr-4 shrink-0 font-sans">运行断点调试</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">DAG协同图例</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">活跃事务历史堆叠 ({workflowTasks.length})</span>
-                  </div>
-
-                  <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-zinc-800/80 gap-3">
-                      <span className="text-xs font-bold text-[#8B949E] uppercase tracking-widest font-mono">
-                        单步调试中枢 (Debugger Unit)
-                      </span>
-                      <button
-                        onClick={executeDagStep}
-                        className="bg-blue-600 hover:bg-blue-550 text-white text-xs font-bold font-mono px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
-                      >
-                        <Play className="w-3.5 h-3.5" />
-                        <span>单步调试运行 (Debug Step)</span>
-                      </button>
-                    </div>
-
-                    {/* Step buttons rendering */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-center text-xs font-mono pt-1">
-                      {[
-                        { id: 0, label: '1. 智能意图识别', desc: 'Aria + Nova 调度分发模式' },
-                        { id: 1, label: '2. 选品价格核减', desc: 'Barton 智能算力对重' },
-                        { id: 2, label: '3. 顺丰物流联调', desc: 'Cyrus 物运调度一键代发' },
-                        { id: 3, label: '4. 金留损账分核', desc: 'Fiona 挂号 Stripe 平准' }
-                      ].map(item => (
-                        <div
-                          key={item.id}
-                          className={`py-3.5 px-3 rounded-xl border transition-all duration-300 cursor-pointer ${
-                            dagStep === item.id 
-                              ? 'border-blue-500 bg-blue-950/40 text-blue-300 font-bold shadow-lg shadow-blue-500/10'
-                              : 'border-zinc-800/60 bg-zinc-950 text-zinc-500'
-                          }`}
-                          onClick={() => setDagStep(item.id)}
-                        >
-                          <div className="text-[12px]">{item.label}</div>
-                          <div className={`text-[9px] uppercase font-normal mt-1 leading-normal ${dagStep === item.id ? 'text-blue-400' : 'text-zinc-600'}`}>{item.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Mock Console */}
-                    <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-4 h-36 overflow-y-auto font-mono text-[11px] leading-relaxed text-blue-300 space-y-1.5 shadow-inner">
-                      {taskLogs.map((log, i) => (
-                        <div key={i} className="flex items-start gap-1">
-                          <span className="text-zinc-650 select-none">&gt;</span>
-                          <span>{log}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                  </div>
-
-                  {/* Task list table */}
-                  <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                    <h4 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">当前活跃的 DAG 任务流水</h4>
-                    
-                    <div className="overflow-x-auto border border-zinc-800/60 rounded-xl bg-zinc-950/40">
-                      <table className="w-full text-left text-xs border-collapse font-mono text-zinc-300">
-                        <thead>
-                          <tr className="bg-zinc-950 text-[#8B949E] border-b border-zinc-800/80">
-                            <th className="p-3">任务内部编号</th>
-                            <th className="p-3">关联智脑工作流名</th>
-                            <th className="p-3">对应租户公司</th>
-                            <th className="p-3">调度时耗 / 进度</th>
-                            <th className="p-3 text-right">流控状态</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-900">
-                          {workflowTasks.map(task => (
-                            <tr key={task.id} className="hover:bg-zinc-900/20 transition">
-                              <td className="p-3 font-semibold text-white">{task.id}</td>
-                              <td className="p-3 font-sans font-bold text-white">{task.name}</td>
-                              <td className="p-3 font-sans text-zinc-400">{task.company}</td>
-                              <td className="p-3 text-zinc-500">审计于 {task.time} UTC</td>
-                              <td className="p-3 text-right">
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  task.status === '已完成' ? 'bg-emerald-950/50 text-emerald-400 border border-emerald-900/30' :
-                                  task.status === '执行中' ? 'bg-blue-950/50 text-blue-400 border border-blue-900/30' :
-                                  task.status === '已排队' ? 'bg-amber-950/50 text-amber-400 border border-amber-900/30' : 'bg-rose-950/50 text-rose-400 border border-rose-900/30'
-                                }`}>
-                                  {task.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                </div>
+                <OperationsDevOps />
               )}
 
-              {/* ----------------- 5. 模板中心 / TEMPLATE CENTER ----------------- */}
+              {/* ----------------- 5. 行业模板 / INDUSTRY TEMPLATES ----------------- */}
               {activeTab === 'template' && (
-                <div className="space-y-6 text-[#E8EAED]">
-                  
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                        行业预置模板市场
-                      </span>
-                    </div>
-                  </div>
+                <AppStoreManagement />
+              )}
 
-                  <div className="bg-[#09090B] rounded-xl border border-[#2F3336]/60 p-5 shadow-2xl space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-zinc-900 gap-3">
-                      <span className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">
-                        行业定制提示词资产集 (Prompt Registry)
-                      </span>
-                      <button
-                        onClick={() => alert('夏季大促及高奢典当行专属 Prompt 已装载，等待多活节点握手。')}
-                        className="bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold font-mono px-3.5 py-1.5 rounded-lg border border-zinc-700/50 transition cursor-pointer"
-                      >
-                        + 导入第三方 Prompt 集
-                      </button>
-                    </div>
+              {/* ----------------- 5.5 应用市场 / APP STORE ----------------- */}
+              {activeTab === 'app_store' && (
+                <AppStoreManagement />
+              )}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {[
-                        { title: '一键服装快反流微调', type: '行业微调', deployed: '420 家', file: 'aria_designer_v4.prompt' },
-                        { title: '跑腿配送闪送顺运一单', type: '物流专项', deployed: '310 家', file: 'sf_instant_v2.json' },
-                        { title: '高奢黄金浮动对冲核重', type: '财务智体', deployed: '155 家', file: 'gold_price_hedge.prompt' },
-                        { title: '美化丽人高定玫瑰界面', type: '页面视觉', deployed: '195 家', file: 'rose_beauty.theme' }
-                      ].map((tpl, i) => (
-                        <div key={i} className="bg-zinc-950 border border-zinc-850 p-4 rounded-xl space-y-3 hover:border-zinc-700 transition">
-                          <span className="text-[10px] font-bold text-blue-400 bg-blue-950/40 border border-blue-900/30 px-1.5 py-0.5 rounded w-fit block font-mono">
-                            {tpl.type}
-                          </span>
-                          <h4 className="font-bold text-white text-xs">{tpl.title}</h4>
-                          <span className="text-[10px] text-zinc-500 font-mono block">绑定名: <span className="text-zinc-350">{tpl.file}</span></span>
-                          <div className="text-[11px] font-bold text-indigo-400 font-mono pt-2 border-t border-zinc-900">部署量: {tpl.deployed}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              {/* ----------------- 5.6 主题商店 / THEME STORE ----------------- */}
+              {activeTab === 'theme' && (
+                <ThemeStore />
+              )}
 
-                </div>
+              {/* ----------------- 5.7 客户支持 / CUSTOMER SUPPORT ----------------- */}
+              {activeTab === 'support' && (
+                <CustomerSupport />
+              )}
+
+              {/* ----------------- 5.8 LVA 视频智体 / LVA VIDEO AGENT ----------------- */}
+              {activeTab === 'lva' && (
+                <LVAView />
               )}
 
               {/* ----------------- 6. 财务中心 / FINANCIAL CENTER ----------------- */}
               {activeTab === 'finance' && (
-                <div className="space-y-6 text-[#E8EAED]">
-                  
-                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
-                    <div className="flex items-center space-x-2">
-                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                        财务平准综合对账大盘
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex border-b border-zinc-800/80 pb-3 gap-6 text-xs text-zinc-400 font-bold overflow-x-auto scrollbar-none">
-                    <span className="text-blue-400 cursor-pointer border-b-2 border-blue-500 pb-3 px-2 pr-4 shrink-0 font-sans">财务综合对账</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">模拟资金回调审计</span>
-                    <span className="hover:text-white cursor-pointer pb-3 px-2 shrink-0 font-sans">毛利率预警大盘</span>
-                  </div>
-
-                  {/* KPIs */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-left">
-                    {[
-                      { title: '平台结算累计流水', val: '￥1,254,800', change: '+24.5% 本季度比' },
-                      { title: '租户季费/年续期在账', val: '￥157,750', change: '共 6 家租赁实例' },
-                      { title: '智德算力消耗平准值', val: '￥32,490', change: '100% 对位抵扣' },
-                      { title: 'SaaS 净值平准率', val: '79.28%', change: '安全绿线收益区间' }
-                    ].map((kpi, i) => (
-                      <div key={i} className="bg-zinc-950 border border-zinc-800/80 p-4 rounded-xl shadow-2xl hover:border-zinc-700 transition">
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest font-mono block">{kpi.title}</span>
-                        <div className="text-lg md:text-xl font-mono font-black text-white tracking-tight my-2">{kpi.val}</div>
-                        <span className="text-[10px] text-emerald-400 font-bold font-mono">{kpi.change}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Ledger logs */}
-                  <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-zinc-900 gap-3">
-                      <span className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">
-                        对账记录流控制栈 (Callback ledger)
-                      </span>
-                      <button
-                        onClick={() => handleSuggestionClick('模拟 32K 租赁回调入账')}
-                        className="bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold font-mono px-3.5 py-1.5 border border-zinc-700/50 rounded-lg transition cursor-pointer"
-                      >
-                        模拟入账 ￥32K
-                      </button>
-                    </div>
-
-                    <div className="space-y-2">
-                      {billingLogs.map((log, idx) => (
-                        <div key={idx} className="bg-zinc-950 border border-zinc-850 p-3 rounded-lg flex items-center justify-between font-mono text-xs hover:border-zinc-700 transition text-zinc-300">
-                          <div>
-                            <span className="text-blue-400">[{log.id}]</span>
-                            <span className="font-sans font-bold text-white ml-2">{log.customer}</span>
-                            <span className="text-zinc-550 ml-2 font-sans font-semibold text-[10.5px]">({log.desc})</span>
-                          </div>
-                          <div className="flex gap-4 items-center">
-                            <span className="text-emerald-450 font-bold text-right">{log.amount}</span>
-                            <span className="text-[10px] text-zinc-500">{log.date}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                </div>
+                <>
+                  <BillingSubscriptionPanel tenantId={selectedTenantId} onAddLog={addLog} />
+                  <PlatformFinance />
+                </>
               )}
 
               {/* ----------------- 7. 用户中心 / USER CENTER ----------------- */}
@@ -1266,22 +1534,22 @@ export default function PlatformAdminView({
                     <div className="flex items-center space-x-2">
                       <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                       <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                        多租户管理员登录审计及安全哨所
+                        账号审计
                       </span>
                     </div>
                   </div>
 
                   <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
-                    <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">租户所有人注册索引及其登录探针 (Audit Pool)</h3>
+                    <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">账号索引</h3>
                     
                     <div className="overflow-x-auto border border-zinc-800/60 rounded-xl bg-zinc-950/40">
                       <table className="w-full text-left text-xs border-collapse font-mono text-zinc-300">
                         <thead>
                           <tr className="bg-zinc-950 text-[#8B949E] border-b border-zinc-800/80 uppercase text-[10px]">
-                            <th className="p-3">注册邮箱（账号名）</th>
-                            <th className="p-3">平台角色</th>
-                            <th className="p-3">所属绑定公司</th>
-                            <th className="p-3 text-right">上次接入Session状态</th>
+                            <th className="p-3">账号</th>
+                            <th className="p-3">角色</th>
+                            <th className="p-3">公司</th>
+                            <th className="p-3 text-right">上次接入</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-900">
@@ -1294,7 +1562,7 @@ export default function PlatformAdminView({
                                 </span>
                               </td>
                               <td className="p-3 font-semibold text-zinc-400 font-sans">{user.corp}</td>
-                              <td className="p-3 text-right text-zinc-500">正常于今日 {user.bgLogs}</td>
+                              <td className="p-3 text-right text-zinc-500">{user.bgLogs}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1305,128 +1573,592 @@ export default function PlatformAdminView({
                 </div>
               )}
 
-              {/* ----------------- 8. 系统中心 / SYSTEM CENTER ----------------- */}
-              {activeTab === 'system' && (
+              {/* ----------------- 9. 数据库 / DATABASE CENTER ----------------- */}
+              {activeTab === 'database' && (
                 <div className="space-y-6 text-[#E8EAED]">
-                  
                   <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
                     <div className="flex items-center space-x-2">
                       <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                       <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
-                        后台加密安全及防火墙盾牌接管
+                        数据库
+                      </span>
+                    </div>
+                    <button
+                      onClick={fetchDatabase}
+                      disabled={isLoadingDb}
+                      className="bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold font-mono px-3 py-1 rounded-lg transition disabled:opacity-50"
+                    >
+                      {isLoadingDb ? '刷新中...' : '同步'}
+                    </button>
+                  </div>
+
+                  <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl overflow-hidden flex flex-col h-[600px]">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono flex items-center gap-2">
+                        <Database className="w-3.5 h-3.5" />
+                        JSON 视图
+                      </h3>
+                      <div className="text-[10px] text-zinc-500 font-mono">
+                        {databaseJson ? 'CONNECTED' : 'DISCONNECTED'}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 bg-black/50 border border-zinc-850 rounded-xl p-4 overflow-auto font-mono text-xs text-blue-300 scrollbar-thin">
+                      {isLoadingDb ? (
+                        <div className="h-full flex items-center justify-center text-zinc-500 italic">
+                          拉取中...
+                        </div>
+                      ) : databaseJson ? (
+                        <pre className="whitespace-pre-wrap break-all leading-relaxed">
+                          {JSON.stringify(databaseJson, null, 2)}
+                        </pre>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-rose-500 italic">
+                          失败。
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ----------------- 5. 知识中心 / KNOWLEDGE CENTER ----------------- */}
+              {activeTab === 'knowledge' && (
+                <div className="space-y-6 text-[#E8EAED]">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                        知识库
                       </span>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
-                    
-                    {/* RBAC */}
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4 lg:col-span-1">
-                      <div>
-                        <h4 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">RBAC 角色端点一键准入</h4>
-                        <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">对四层授权系统的接口读、高危写、以及销毁权限进行即时微调：</p>
-                      </div>
-
-                      <div className="overflow-x-auto border border-zinc-800/60 rounded-xl text-xs font-mono">
-                        <table className="w-full text-center border-collapse">
-                          <thead>
-                            <tr className="bg-zinc-950 text-[#8B949E] border-b border-zinc-800/80 text-[9px] uppercase">
-                              <th className="p-2 text-left">角色授权</th>
-                              <th className="p-2">读缓存</th>
-                              <th className="p-2">写API</th>
-                              <th className="p-2">销毁</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-zinc-900 text-zinc-300">
-                            {Object.keys(rbacMatrix).map(role => (
-                              <tr key={role} className="hover:bg-zinc-900/30 transition">
-                                <td className="p-2 text-left font-bold text-white text-[10px]">{role}</td>
-                                <td className="p-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={rbacMatrix[role].READ}
-                                    onChange={() => toggleRbac(role, 'READ')}
-                                    className="accent-blue-500 rounded cursor-pointer w-3.5 h-3.5"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={rbacMatrix[role].WRITE}
-                                    onChange={() => toggleRbac(role, 'WRITE')}
-                                    className="accent-blue-500 rounded cursor-pointer w-3.5 h-3.5"
-                                  />
-                                </td>
-                                <td className="p-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={rbacMatrix[role].DESTROY}
-                                    onChange={() => toggleRbac(role, 'DESTROY')}
-                                    className="accent-blue-500 rounded cursor-pointer w-3.5 h-3.5"
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {/* Categories */}
+                    <div className="lg:col-span-1 space-y-4">
+                      <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                        <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">分类</h3>
+                        <div className="space-y-1">
+                          {kbCategories.map((cat) => (
+                            <button
+                              key={cat.id}
+                              onClick={() => setKbCategory(cat.id)}
+                              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-all cursor-pointer ${
+                                kbCategory === cat.id
+                                  ? 'bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/30'
+                                  : 'text-zinc-500 hover:bg-zinc-900 hover:text-zinc-300'
+                              }`}
+                            >
+                              <span>{cat.name}</span>
+                              <span className="text-[10px] font-mono opacity-60">{cat.count}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <button className="w-full py-2 bg-zinc-950 border border-zinc-800 rounded-lg text-[10px] font-bold text-zinc-400 hover:border-emerald-500/50 transition-colors flex items-center justify-center gap-2">
+                          <Plus className="w-3 h-3" />
+                          <span>新增</span>
+                        </button>
                       </div>
                     </div>
 
-                    {/* API credentials display and logs */}
-                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4 lg:col-span-2">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-zinc-900 gap-3">
-                        <div>
-                          <h4 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">三方凭证池及加密硬水位 (API Keys)</h4>
+                    {/* Files List */}
+                    <div className="lg:col-span-3 space-y-4">
+                      <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-zinc-900">
+                          <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                            <input
+                              type="text"
+                              placeholder="搜索..."
+                              value={kbSearch}
+                              onChange={(e) => setKbSearch(e.target.value)}
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 pl-9 pr-4 text-xs focus:border-emerald-500 outline-none transition-all"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <button className="bg-zinc-900 hover:bg-zinc-800 text-[10px] text-zinc-300 font-bold px-3 py-2 rounded-xl border border-zinc-800 transition flex items-center gap-2">
+                              <HardDrive className="w-3 h-3" />
+                              <span>同步</span>
+                            </button>
+                            <button className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-emerald-600/10 flex items-center gap-2">
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>上传</span>
+                            </button>
+                          </div>
                         </div>
-                        
-                        <div className="flex items-center gap-2 text-xs font-mono font-semibold">
-                          <span className="text-zinc-500">网防 DDoS:</span>
-                          <button
-                            onClick={() => {
-                              const next = !firewallActive;
-                              setFirewallActive(next);
-                              handleSuggestionClick(next ? '激活全局 DDoS 防御盾牌' : '一键暂时关闭 DDoS 防御');
-                            }}
-                            className={`px-3 py-1 rounded-lg text-[10px] font-bold transition font-mono cursor-pointer ${
-                              firewallActive ? 'bg-emerald-600 border border-emerald-900/20 text-white' : 'bg-rose-600 border border-rose-900/20 text-white'
-                            }`}
-                          >
-                            {firewallActive ? 'SHIELD_ACTIVE' : 'SHIELD_PAUSED'}
-                          </button>
+
+                        <div className="space-y-2">
+                          {kbFiles
+                            .filter(f => kbCategory === 'all' || f.category === kbCategory)
+                            .filter(f => f.name.toLowerCase().includes(kbSearch.toLowerCase()))
+                            .map((file) => (
+                              <div key={file.id} className="bg-zinc-950 border border-zinc-900 p-4 rounded-xl flex items-center justify-between group hover:border-emerald-500/30 transition-all">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 rounded-lg bg-emerald-950/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                    <File className="w-5 h-5" />
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">{file.name}</h4>
+                                    <div className="flex items-center gap-3 mt-1 text-[9px] text-zinc-500 font-mono">
+                                      <span className="uppercase px-1.5 py-0.5 bg-zinc-900 rounded border border-zinc-800">{file.category}</span>
+                                      <span>{file.fileSize}</span>
+                                      <span>{file.uploadedAt}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 transition"><Eye className="w-3.5 h-3.5" /></button>
+                                  <button className="p-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white rounded-lg border border-zinc-800 transition"><Settings className="w-3.5 h-3.5" /></button>
+                                  <button className="p-2 bg-zinc-900 hover:bg-rose-950/30 text-zinc-400 hover:text-rose-400 rounded-lg border border-zinc-800 hover:border-rose-900/30 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                            ))}
                         </div>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {apiKeys.map(key => (
-                          <div key={key.name} className="bg-zinc-950 border border-zinc-850 p-3 rounded-lg space-y-2 hover:border-zinc-700 transition">
-                            <div className="flex justify-between items-center text-[10.5px] font-mono">
-                              <span className="font-bold text-white truncate mr-1">{key.name}</span>
-                              <button
-                                onClick={() => toggleKeyVisibility(key.name)}
-                                className="text-zinc-500 hover:text-white transition cursor-pointer shrink-0"
-                              >
-                                {key.hidden ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
-                              </button>
+              {/* ----------------- 5.5 全局设置 / PLATFORM SETTINGS ----------------- */}
+              {activeTab === 'settings' && (
+                <div className="space-y-6 text-[#E8EAED]">
+                   <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                        平台设置中心
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 font-mono">V3.0 Enterprise Admin</div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* AI Engine Config */}
+                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">AI 运行引擎</h3>
+                        <div className="px-2 py-0.5 rounded bg-blue-950/30 text-blue-400 text-[9px] border border-blue-900/30">
+                          {platformSettings.ai.provider.toUpperCase()}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-500">模型提供商</label>
+                          <select 
+                            value={platformSettings.ai.provider}
+                            onChange={(e) => saveSettings('ai', { ...platformSettings.ai, provider: e.target.value })}
+                            className="w-full bg-neutral-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-white focus:outline-none"
+                          >
+                            <option value="ollama">Ollama (Local)</option>
+                            <option value="openai">OpenAI (SaaS)</option>
+                            <option value="anthropic">Anthropic (Claude)</option>
+                            <option value="gemini">Google Gemini</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-zinc-500">API 端点 / 模型 ID</label>
+                          <input 
+                            type="text"
+                            value={platformSettings.ai.model}
+                            onChange={(e) => saveSettings('ai', { ...platformSettings.ai, model: e.target.value })}
+                            className="w-full bg-neutral-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-white font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Gateways */}
+                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                      <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">支付网关管理</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { id: 'stripe', label: 'Stripe Global', icon: CreditCard },
+                          { id: 'alipay', label: '支付宝支付', icon: Wallet },
+                          { id: 'wechat', label: '微信支付', icon: Smartphone },
+                          { id: 'paypal', label: 'PayPal', icon: DollarSign }
+                        ].map(gate => (
+                          <div key={gate.id} className="flex items-center justify-between p-2 rounded bg-neutral-900 border border-zinc-800">
+                            <div className="flex items-center gap-2">
+                              <gate.icon className="w-3 h-3 text-zinc-500" />
+                              <span className="text-[10px] font-bold">{gate.label}</span>
                             </div>
-                            <div className="bg-black text-[10px] font-mono text-zinc-500 rounded px-2 py-1 select-all truncate border border-zinc-900">
-                              {key.hidden ? '•••••••••••••••••' : key.key}
-                            </div>
-                            <span className="text-[8px] text-zinc-500 font-semibold uppercase block tracking-wider font-mono">HOST: {key.host}</span>
+                            <button 
+                              onClick={() => saveSettings('payment', { ...platformSettings.payment, [gate.id]: !platformSettings.payment[gate.id as keyof typeof platformSettings.payment] })}
+                              className={`w-8 h-4 rounded-full relative transition-colors ${platformSettings.payment[gate.id as keyof typeof platformSettings.payment] ? 'bg-blue-600' : 'bg-zinc-800'}`}
+                            >
+                              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${platformSettings.payment[gate.id as keyof typeof platformSettings.payment] ? (platformSettings.payment[gate.id as keyof typeof platformSettings.payment] ? 'right-0.5' : 'left-0.5') : 'left-0.5'}`} />
+                            </button>
                           </div>
                         ))}
                       </div>
-
-                      {/* Audit lines */}
-                      <div className="bg-black p-3.5 h-20 overflow-y-auto font-mono text-[10px] text-zinc-400 border border-zinc-900 rounded-lg space-y-1">
-                        <div className="text-blue-400 font-bold uppercase text-[9px] tracking-wider select-none">【超级操作审计链日志】</div>
-                        <div>➔ 03:25: barbrostruck@gmail.com 登录平台超级管理视角成功。</div>
-                        {firewallActive && <div className="text-emerald-400">➔ 03:25: 防控盾牌就位，已实时放行 WS 心跳帧，拦截代理劫杀 0 次。</div>}
+                      <div className="pt-2 flex items-center gap-2">
+                        <input 
+                          type="checkbox" 
+                          checked={platformSettings.payment.testMode} 
+                          onChange={(e) => saveSettings('payment', { ...platformSettings.payment, testMode: e.target.checked })}
+                          className="w-3 h-3 rounded bg-zinc-900 border-zinc-800"
+                        />
+                        <label className="text-[9px] text-zinc-500 font-mono">开启沙盒测试模式 (Sandbox Mode)</label>
                       </div>
-
                     </div>
 
+                    {/* Feature Toggles */}
+                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                      <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">功能模块注册</h3>
+                      <div className="space-y-2">
+                        {[
+                          { id: 'allowRegistration', label: '允许新租户注册', desc: '开启后外部用户可访问注册入口' },
+                          { id: 'maintenanceMode', label: '系统维护模式', desc: '开启后全站展示维护页面' },
+                          { id: 'aiAutoDispatch', label: 'AI 自动派单', desc: '开启后 AI 将自动处理未处理订单' }
+                        ].map(feature => (
+                          <div key={feature.id} className="flex items-center justify-between py-1.5 border-b border-zinc-800/40 last:border-0">
+                            <div>
+                              <h4 className="text-[10px] font-bold text-white">{feature.label}</h4>
+                              <p className="text-[8px] text-zinc-500">{feature.desc}</p>
+                            </div>
+                            <button 
+                              onClick={() => saveSettings('features', { ...platformSettings.features, [feature.id]: !platformSettings.features[feature.id as keyof typeof platformSettings.features] })}
+                              className={`w-10 h-5 rounded-full relative transition-colors ${platformSettings.features[feature.id as keyof typeof platformSettings.features] ? 'bg-emerald-600' : 'bg-zinc-800'}`}
+                            >
+                              <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${platformSettings.features[feature.id as keyof typeof platformSettings.features] ? 'right-1' : 'left-1'}`} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Configuration Registry */}
+                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">配置治理中心</h3>
+                          <p className="text-[9px] text-zinc-500">自动同步平台设置到配置注册表，并提供覆盖率审计。</p>
+                        </div>
+                        <button
+                          onClick={loadConfigRegistry}
+                          className="text-[10px] text-blue-400 hover:text-blue-300 transition"
+                        >
+                          刷新注册表
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-3 text-[10px]">
+                        <div className="flex items-center justify-between rounded-lg bg-zinc-950 border border-zinc-800 p-3">
+                          <span>注册项数量</span>
+                          <strong>{configRegistry.length}</strong>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-zinc-950 border border-zinc-800 p-3">
+                          <span>覆盖率</span>
+                          <strong>{configReport?.coverage ?? 'N/A'}%</strong>
+                        </div>
+                        <div className="flex items-center justify-between rounded-lg bg-zinc-950 border border-zinc-800 p-3">
+                          <span>缺失项</span>
+                          <strong>{configReport?.missingRegistry?.length ?? 0}</strong>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 pt-3">
+                        {configRegistry.slice(0, 5).map((item) => (
+                          <div key={item.key} className="bg-zinc-950 border border-zinc-800 rounded-lg p-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[11px] font-bold text-white">{item.key}</p>
+                                <p className="text-[9px] text-zinc-500">{item.description}</p>
+                              </div>
+                              <span className="text-[10px] text-zinc-400">{item.type}</span>
+                            </div>
+                            <div className="mt-2 flex items-center justify-between text-[9px] text-zinc-500">
+                              <span>当前值: {String(item.current_value)}</span>
+                              <span>默认: {String(item.default_value)}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {configRegistry.length > 5 && (
+                          <div className="text-[9px] text-zinc-500">仅展示前 5 条。更多项请在后端审计页面查看。</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Notifications */}
+                    <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                      <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">全局通知配置</h3>
+                      <div className="space-y-3">
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 rounded bg-blue-950/20 text-blue-400">
+                                <Send className="w-3.5 h-3.5" />
+                              </div>
+                              <span className="text-[10px] font-bold">邮件通知服务</span>
+                            </div>
+                            <button className="text-[9px] text-blue-400 hover:underline">配置 SMTP</button>
+                         </div>
+                         <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="p-1.5 rounded bg-purple-950/20 text-purple-400">
+                                <Zap className="w-3.5 h-3.5" />
+                              </div>
+                              <span className="text-[10px] font-bold">Webhook 实时推送</span>
+                            </div>
+                            <button className="text-[9px] text-purple-400 hover:underline">管理终端</button>
+                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ----------------- 6. 系统底层 / INFRA LAYER ----------------- */}
+              {(activeTab === 'infra' || activeTab === 'system') && (
+                <div className="space-y-6 text-[#E8EAED]">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 font-mono">
+                        系统底层
+                      </span>
+                    </div>
                   </div>
 
+                  {/* Sub-tabs for Infra */}
+                  <div className="flex border-b border-zinc-800/80 pb-3 gap-6 text-xs text-zinc-400 font-bold overflow-x-auto scrollbar-none">
+                    {[
+                      { id: 'rbac', label: '权限矩阵', icon: ShieldCheck },
+                      { id: 'api', label: '接口调试', icon: Code },
+                      { id: 'infrastructure', label: '基础设施', icon: Zap },
+                      { id: 'firewall', label: '防火墙', icon: ShieldAlert },
+                      { id: 'queue', label: '队列监测', icon: Server },
+                      { id: 'bucket', label: '文件存储', icon: HardDrive }
+                    ].map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setInfraSubTab(tab.id as any)}
+                        className={`flex items-center gap-2 pb-3 px-2 transition-all cursor-pointer whitespace-nowrap ${
+                          infraSubTab === tab.id ? 'text-rose-500 border-b-2 border-rose-500' : 'hover:text-white'
+                        }`}
+                      >
+                        <tab.icon className="w-3.5 h-3.5" />
+                        <span>{tab.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6">
+                    {/* RBAC Matrix */}
+                    {infraSubTab === 'rbac' && (
+                      <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                        <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">权限表</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-[10px] font-mono border-collapse">
+                            <thead>
+                              <tr className="text-zinc-500 border-b border-zinc-800">
+                                <th className="p-3">角色 ID</th>
+                                <th className="p-3">权限矩阵 (PERMISSIONS MATRIX)</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-900">
+                              {Object.entries(rbacMatrix).map(([role, rights]) => (
+                                <tr key={role} className="hover:bg-white/5 group">
+                                  <td className="p-3 font-bold text-zinc-300 group-hover:text-blue-400 transition-colors uppercase">{role}</td>
+                                  <td className="p-3">
+                                    <div className="flex flex-wrap gap-2">
+                                      {Object.entries(rights).map(([right, active]) => (
+                                        <button 
+                                          key={right}
+                                          onClick={() => toggleRbac(role, right)}
+                                          className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all border ${
+                                            active 
+                                              ? 'bg-blue-950/30 text-blue-400 border-blue-900/30 shadow-[0_0_10px_rgba(59,130,246,0.1)]' 
+                                              : 'bg-zinc-900 text-zinc-600 border-zinc-800 opacity-50'
+                                          }`}
+                                        >
+                                          {right}
+                                        </button>
+                                      ))}
+                                      {/* Add new permission button */}
+                                      <button
+                                        onClick={() => {
+                                          const newPerm = prompt('输入新权限键名 (e.g. system_write):');
+                                          if (newPerm) toggleRbac(role, newPerm);
+                                        }}
+                                        className="px-2 py-1 rounded-md text-[9px] font-bold bg-zinc-900 text-zinc-500 border border-dashed border-zinc-700 hover:border-zinc-500 hover:text-zinc-300 transition-all"
+                                      >
+                                        + 新增
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* API Gateway (Swagger Style) */}
+                    {infraSubTab === 'api' && (
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-1 space-y-4">
+                          <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                            <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">接口测试</h3>
+                            <div className="space-y-2">
+                              {[
+                                { method: 'GET', path: '/api/v1/health', name: '健康检查' },
+                                { method: 'POST', path: '/api/v1/auth/login', name: '身份鉴权' },
+                                { method: 'GET', path: '/api/v1/agents/roster', name: '智体名单' },
+                                { method: 'POST', path: '/api/v1/billing/ledger', name: '流水审计' },
+                                { method: 'DELETE', path: '/api/v1/tenant/purge', name: '租户清除' }
+                              ].map((api, idx) => (
+                                <button
+                                  key={idx}
+                                  onClick={() => handleTestAPIEndpoint(api.path)}
+                                  className="w-full p-3 bg-zinc-950 border border-zinc-900 rounded-xl hover:border-rose-500/50 transition flex items-center justify-between group"
+                                >
+                                  <div className="text-left">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${
+                                        api.method === 'GET' ? 'bg-emerald-950 text-emerald-400' :
+                                        api.method === 'POST' ? 'bg-blue-950 text-blue-400' : 'bg-rose-950 text-rose-400'
+                                      }`}>{api.method}</span>
+                                      <span className="text-[10px] font-mono text-zinc-300">{api.path}</span>
+                                    </div>
+                                    <div className="text-[9px] text-zinc-500 mt-1">{api.name}</div>
+                                  </div>
+                                  <Play className="w-3 h-3 text-zinc-700 group-hover:text-rose-400 transition-colors" />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="lg:col-span-2">
+                          <div className="bg-black rounded-xl border border-zinc-800/80 p-5 shadow-2xl h-full flex flex-col">
+                            <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono mb-4">响应日志</h3>
+                            <div className="flex-1 bg-zinc-950/50 p-4 rounded-xl font-mono text-[10px] text-emerald-400 overflow-auto border border-zinc-900">
+                              {isCallingAPI ? (
+                                <div className="flex flex-col items-center justify-center h-full space-y-3">
+                                  <div className="w-6 h-6 border-2 border-rose-500/20 border-t-rose-500 rounded-full animate-spin" />
+                                  <span className="text-zinc-500 italic">发起中...</span>
+                                </div>
+                              ) : (
+                                <pre className="whitespace-pre-wrap">{swaggerResponse}</pre>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Infrastructure Services */}
+                    {infraSubTab === 'infrastructure' && (
+                      <InfrastructureServices />
+                    )}
+
+                    {/* WAF Firewall */}
+                    {infraSubTab === 'firewall' && (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">流量监测</h3>
+                            <button 
+                              onClick={() => setFirewallActive(!firewallActive)}
+                              className={`text-[9px] font-bold px-2 py-0.5 rounded-full border transition-colors ${firewallActive ? 'bg-emerald-950 text-emerald-400 border-emerald-900/30' : 'bg-rose-950 text-rose-400 border-rose-900/30'}`}
+                            >
+                              {firewallActive ? 'ACTIVE' : 'OFF'}
+                            </button>
+                          </div>
+                          <div className="h-48 relative flex items-end gap-1 px-2 pt-4">
+                            <div className="absolute inset-0 opacity-5 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] [background-size:20px_20px]" />
+                            {chartData.map((d, i) => (
+                              <motion.div 
+                                key={i}
+                                initial={{ height: 0 }}
+                                animate={{ height: `${(d.reqs / 800) * 100}%` }}
+                                className={`flex-1 min-w-[4px] rounded-t-sm ${d.reqs > 500 ? 'bg-rose-500' : 'bg-emerald-500'} opacity-80`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                          <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">防护规则</h3>
+                          <div className="space-y-2">
+                            {[
+                              { rule: 'SQL_PROTECT', state: 'ON', threat: '高' },
+                              { rule: 'XSS_FILTER', state: 'ON', threat: '中' },
+                              { rule: 'DDOS_LIMIT', state: 'ON', threat: '极高' },
+                              { rule: 'GEO_BLOCK', state: 'OFF', threat: '低' },
+                              { rule: 'BOT_BLOCK', state: 'ON', threat: '中' }
+                            ].map((rule, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-3 bg-zinc-950 border border-zinc-900 rounded-xl">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full ${rule.state === 'ON' ? 'bg-emerald-500' : 'bg-zinc-700'}`} />
+                                  <span className="text-[11px] font-mono text-zinc-300">{rule.rule}</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                                    rule.threat === '极高' ? 'bg-rose-950 text-rose-400' :
+                                    rule.threat === '高' ? 'bg-orange-950 text-orange-400' : 'bg-blue-950 text-blue-400'
+                                  }`}>{rule.threat}</span>
+                                  <span className="text-[10px] font-bold text-zinc-600">{rule.state}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Websocket Queues */}
+                    {infraSubTab === 'queue' && (
+                      <div className="bg-[#09090B] rounded-xl border border-zinc-800/80 p-5 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-[#8B949E] uppercase tracking-wider font-mono">排队管线</h3>
+                          <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/20 px-2 py-0.5 rounded border border-emerald-900/30">SOCKET: 4,821</span>
+                        </div>
+                        <div className="space-y-1.5 max-h-96 overflow-y-auto custom-scrollbar font-mono text-[10px]">
+                          {[...Array(10)].map((_, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 bg-zinc-950 rounded-lg border border-zinc-900 hover:border-zinc-800 transition">
+                              <div className="flex gap-4 items-center">
+                                <span className="text-zinc-700">[{new Date().toLocaleTimeString()}]</span>
+                                <span className="text-blue-400">PUB/SUB</span>
+                                <span className="text-zinc-300">topic: {Math.floor(Math.random() * 1000)}</span>
+                                <span className="text-zinc-500 italic truncate max-w-md">Payload: {"{action: 'sync'}"}</span>
+                              </div>
+                              <span className="text-emerald-500 font-bold">ACK ✓</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* File Buckets */}
+                    {infraSubTab === 'bucket' && (
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {[
+                          { name: 'public-assets', size: '12.4 GB', files: 1420, icon: ImageIcon },
+                          { name: 'tenant-backups', size: '48.2 GB', files: 85, icon: Database },
+                          { name: 'agent-memories', size: '2.8 GB', files: 5240, icon: Cpu }
+                        ].map((bucket, idx) => (
+                          <div key={idx} className="bg-zinc-950 border border-zinc-800 p-5 rounded-2xl space-y-4 hover:border-rose-500/50 transition group cursor-pointer">
+                            <div className="flex justify-between items-start">
+                              <div className="w-12 h-12 rounded-2xl bg-zinc-900 flex items-center justify-center text-zinc-500 group-hover:text-rose-400 transition-colors">
+                                <bucket.icon className="w-6 h-6" />
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xs font-black text-white">{bucket.size}</div>
+                                <div className="text-[10px] text-zinc-500 font-mono">{bucket.files}</div>
+                              </div>
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-zinc-300 truncate">{bucket.name}</h4>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1436,7 +2168,7 @@ export default function PlatformAdminView({
         </div>
       </main>
 
-      {/* 3. RIGHT SIDEBAR: 24H CO-PILOT DIALOG PANEL (执勤会商室) - Consistent 3-Panel responsive layout */}
+      {/* 3. RIGHT SIDEBAR: 执勤会商室 */}
       <aside className="w-full lg:w-80 border-t lg:border-t-0 lg:border-l border-[#2F3336]/60 bg-[#09090B] p-4 shrink-0 flex flex-col justify-between overflow-y-auto overflow-x-hidden min-h-[620px] lg:h-screen lg:sticky lg:top-0 scrollbar-none space-y-4">
         
         {/* Topic Title */}
@@ -1444,9 +2176,9 @@ export default function PlatformAdminView({
           <div className="flex items-center space-x-2.5 pb-3 border-b border-[#2F3336]/60">
             <MessageSquare className="w-4 h-4 text-[#1D9BF0]" />
             <div>
-              <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider font-mono">驻站数字运维伙伴</span>
+              <span className="text-[10px] uppercase font-bold text-zinc-500 tracking-wider font-mono">数字运维</span>
               <h3 className="text-xs font-black text-white uppercase tracking-wider mt-0.5 leading-none">
-                7x24h 执勤全天候会商室
+                执勤室
               </h3>
             </div>
           </div>
@@ -1454,7 +2186,7 @@ export default function PlatformAdminView({
           {/* Active Specialist Profile Card & Duty Picker */}
           <div className="space-y-3">
             <span className="text-[9px] uppercase font-bold text-zinc-500 tracking-wider font-mono block">
-              当前智体班表 (Click to switch view)
+              执勤班表
             </span>
             <div className="grid grid-cols-4 gap-1 pb-1">
               {Object.entries(activeSpecialistMap).map(([key, spec]) => {
@@ -1474,7 +2206,7 @@ export default function PlatformAdminView({
                   >
                     <span className="text-sm select-none">{spec.emoji}</span>
                     <span className="text-[8px] font-mono whitespace-nowrap overflow-hidden text-ellipsis w-12 text-center mt-0.5 leading-none">
-                      {spec.name.split(' ').pop()}
+                      {spec.name}
                     </span>
                   </button>
                 );
@@ -1498,7 +2230,7 @@ export default function PlatformAdminView({
                     <span>{currentSpecialist.name}</span>
                     <span className="text-[8px] font-mono tracking-tight text-blue-400 font-normal px-1 bg-blue-950/40 rounded border border-blue-900/20">{currentSpecialist.role}</span>
                   </h4>
-                  <p className="text-[8px] text-zinc-500 mt-1 font-mono uppercase tracking-widest leading-none">DUTY_TAB: {activeTab.toUpperCase()}</p>
+                  <p className="text-[8px] text-zinc-500 mt-1 font-mono uppercase tracking-widest leading-none">TAB: {activeTab.toUpperCase()}</p>
                 </div>
               </div>
 
@@ -1511,10 +2243,10 @@ export default function PlatformAdminView({
             <div className="bg-zinc-950/60 border border-zinc-850 p-3 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[9px] uppercase font-bold text-zinc-400 tracking-widest font-mono">
-                  智体协同协作模拟器
+                  协同模拟器
                 </span>
                 <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-1 py-0.5 rounded leading-none select-none">
-                  SIM_ACTIVE
+                  ACTIVE
                 </span>
               </div>
               
@@ -1528,7 +2260,7 @@ export default function PlatformAdminView({
                     : 'bg-[#1D9BF0] hover:bg-blue-500 border-blue-400/10 text-white shadow-md shadow-blue-500/5 cursor-pointer'
                 }`}
               >
-                <span>{isSimulating ? '🛠️ 模拟大促流水中...' : '🟢 模拟团队多岗位智能协同'}</span>
+                <span>{isSimulating ? '🛠️ 模拟中...' : '🟢 启动协同模拟'}</span>
               </button>
             </div>
           </div>
@@ -1564,7 +2296,7 @@ export default function PlatformAdminView({
                 aiMessages.map((msg, i) => (
                   <div key={i} className={`flex flex-col space-y-0.5 ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
                     <span className="text-[8px] text-zinc-500 tracking-wider font-semibold mb-0.5">
-                      {msg.sender === 'user' ? 'ME (ROOT)' : currentSpecialist.name.split(' ').pop()} &bull; {msg.time}
+                      {msg.sender === 'user' ? 'ME' : currentSpecialist.name} &bull; {msg.time}
                     </span>
                     <div className={`p-2 rounded text-[10px] max-w-[90%] leading-relaxed border ${
                       msg.sender === 'user' 
@@ -1582,7 +2314,7 @@ export default function PlatformAdminView({
             <div className="flex items-center justify-between text-[8px] text-zinc-500">
               <span className="flex items-center gap-1 font-mono uppercase tracking-wider">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                SIM_AUTO_COLLABORATION
+                COLLABORATION
               </span>
               <span>SLA: EXCELLENT</span>
             </div>
@@ -1591,7 +2323,7 @@ export default function PlatformAdminView({
           {/* Suggestions container based on selectedTab */}
           <div className="space-y-1.5">
             <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block font-mono pl-1">
-              推荐指令 / SUGGESTIONS
+              建议指令
             </span>
             <div className="flex flex-col gap-1">
               {currentSpecialist.suggestions.slice(0, 3).map((s, idx) => (
@@ -1616,12 +2348,12 @@ export default function PlatformAdminView({
           <div className="bg-zinc-950 p-2 rounded-lg border border-zinc-850 flex items-center justify-between">
             <span className="text-[8.5px] font-mono text-zinc-500 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-amber-500 animate-pulse" />
-              <span>AI 多模态行动工具条 (Copilot)</span>
+              <span>助手</span>
             </span>
             <div className="flex items-center space-x-1">
               <span className="text-[8px] bg-red-950/20 border border-red-900/10 text-rose-400 px-1 py-0.5 rounded cursor-default select-none">投流</span>
               <span className="text-[8px] bg-blue-950/20 border border-blue-900/10 text-blue-400 px-1 py-0.5 rounded cursor-default select-none">打样</span>
-              <span className="text-[8px] bg-emerald-950/20 border border-emerald-900/10 text-emerald-400 px-1 py-0.5 rounded cursor-default select-none font-bold">一揽发</span>
+              <span className="text-[8px] bg-emerald-950/20 border border-emerald-900/10 text-emerald-400 px-1 py-0.5 rounded cursor-default select-none font-bold">发货</span>
             </div>
           </div>
 
@@ -1629,24 +2361,24 @@ export default function PlatformAdminView({
             <div className="flex-1 bg-zinc-950 rounded-lg flex items-center px-2 py-1.5 border border-zinc-850 focus-within:border-blue-500 transition-all">
               <input
                 type="text"
-                placeholder={`向 【${currentSpecialist.name.split(' ').pop()}】 提问...`}
+                placeholder={`向 【${currentSpecialist.name}】 提问...`}
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
                 className="w-full bg-transparent text-xs text-white border-none outline-none ring-0 placeholder-zinc-700"
               />
               <button 
                 type="button" 
-                onClick={() => handleSuggestionClick('上传本日算力分析图片')}
+                onClick={() => handleSuggestionClick('上传分析')}
                 className="p-1 text-zinc-650 hover:text-zinc-400 transition cursor-pointer"
-                title="上传资产或截图"
+                title="上传"
               >
                 <ImageIcon className="w-3.5 h-3.5" />
               </button>
               <button 
                 type="button" 
-                onClick={() => handleSuggestionClick('发起语音指令平整度校验')}
+                onClick={() => handleSuggestionClick('语音指令')}
                 className="p-1 text-zinc-650 hover:text-zinc-400 transition cursor-pointer"
-                title="语音输入"
+                title="语音"
               >
                 <Mic className="w-3.5 h-3.5" />
               </button>

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Shield, ShieldCheck, Users, ToggleLeft, ToggleRight, 
-  UserCheck, AlertTriangle, Key, Plus, Trash2, Edit3, HelpCircle 
+  UserCheck, AlertTriangle, Key, Plus, Trash2, Edit3, HelpCircle, Loader2
 } from 'lucide-react';
 import { UserRole, ROLE_PERMISSIONS, rbacService } from '../services/rbac';
+import { db, collection, doc, onSnapshot, setDoc, deleteDoc, updateDoc, serverTimestamp, getDocs, query, where } from '../services/firebase';
 
 interface TeamMember {
   id: string;
@@ -28,6 +29,7 @@ export default function RoleManagementPanel({
   onAddLog 
 }: RoleManagementPanelProps) {
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<UserRole | 'all'>('all');
   
@@ -36,77 +38,101 @@ export default function RoleManagementPanel({
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberRole, setNewMemberRole] = useState<UserRole>('Staff');
 
-  // Load team list from localStorage
-  const loadMembers = () => {
-    const key = `modaui_rbac_members_${tenantId}`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      setMembers(JSON.parse(stored));
-    } else {
-      const defaultMembers: TeamMember[] = [
-        { id: 'usr-1', name: '智点运营专员', role: 'Staff', email: 'staff@modaui.com', status: 'active', assignedTasks: 18 },
-        { id: 'usr-2', name: '极智副总裁', role: 'Manager', email: 'manager@modaui.com', status: 'active', assignedTasks: 35 },
-        { id: 'usr-3', name: '联合商户所有者', role: 'Merchant Owner', email: 'founder@modaui.com', status: 'active', assignedTasks: 82 }
-      ];
-      localStorage.setItem(key, JSON.stringify(defaultMembers));
-      setMembers(defaultMembers);
-    }
-  };
-
+  // Load team list from Firestore (Real DB Integration)
   useEffect(() => {
-    loadMembers();
+    if (!tenantId) return;
+    
+    setLoading(true);
+    const staffRef = collection(db, 'tenants', tenantId, 'staff');
+    const unsubscribe = onSnapshot(staffRef, (snapshot) => {
+      const staffList: TeamMember[] = [];
+      snapshot.forEach((doc) => {
+        staffList.push({ id: doc.id, ...doc.data() } as TeamMember);
+      });
+      
+      // If empty, seed with initial members
+      if (staffList.length === 0) {
+        const defaultMembers: Partial<TeamMember>[] = [
+          { name: '智点运营专员', role: 'Staff', email: 'staff@modaui.com', status: 'active', assignedTasks: 18 },
+          { name: '极智副总裁', role: 'Manager', email: 'manager@modaui.com', status: 'active', assignedTasks: 35 },
+          { name: '联合商户所有者', role: 'Merchant Owner', email: 'founder@modaui.com', status: 'active', assignedTasks: 82 }
+        ];
+        
+        defaultMembers.forEach(async (m) => {
+          const id = `usr-${Math.random().toString(36).substring(2, 6)}`;
+          await setDoc(doc(db, 'tenants', tenantId, 'staff', id), {
+            ...m,
+            createdAt: serverTimestamp()
+          });
+        });
+      } else {
+        setMembers(staffList);
+      }
+      setLoading(false);
+    }, (err) => {
+      console.error("Firestore Staff Sync Error:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [tenantId]);
 
-  const saveMembers = (newMembers: TeamMember[]) => {
-    setMembers(newMembers);
-    localStorage.setItem(`modaui_rbac_members_${tenantId}`, JSON.stringify(newMembers));
-  };
-
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMemberName.trim() || !newMemberEmail.trim()) return;
 
-    const newMember: TeamMember = {
-      id: `usr-${Math.random().toString(36).substring(2, 6)}`,
+    const id = `usr-${Math.random().toString(36).substring(2, 6)}`;
+    const newMemberData = {
       name: newMemberName,
       role: newMemberRole,
       email: newMemberEmail,
       status: 'active',
-      assignedTasks: 0
+      assignedTasks: 0,
+      createdAt: serverTimestamp()
     };
 
-    const updated = [...members, newMember];
-    saveMembers(updated);
-    
-    setNewMemberName('');
-    setNewMemberEmail('');
-    setNewMemberRole('Staff');
-    setShowAddModal(false);
+    try {
+      await setDoc(doc(db, 'tenants', tenantId, 'staff', id), newMemberData);
+      
+      setNewMemberName('');
+      setNewMemberEmail('');
+      setNewMemberRole('Staff');
+      setShowAddModal(false);
 
-    if (onAddLog) {
-      onAddLog('RBAC 权限守卫', '🛡️', `成功添加用户 ${newMember.name} 并预设「${newMember.role}」RBAC 权限策略。`, 'success');
+      if (onAddLog) {
+        onAddLog('RBAC 权限守卫', '🛡️', `成功添加用户 ${newMemberName} 并预设「${newMemberRole}」RBAC 权限策略。`, 'success');
+      }
+    } catch (err) {
+      console.error("Error adding staff:", err);
     }
   };
 
-  const handleToggleStatus = (memberId: string) => {
-    const updated = members.map(m => {
-      if (m.id === memberId) {
-        const nextStatus = m.status === 'active' ? 'suspended' : 'active';
-        if (onAddLog) {
-          onAddLog('RBAC 权限守卫', '⚠️', `主体「${m.name}」已被安全调配，状态更新为: [${nextStatus.toUpperCase()}]`, 'warn');
-        }
-        return { ...m, status: nextStatus };
+  const handleToggleStatus = async (memberId: string) => {
+    const member = members.find(m => m.id === memberId);
+    if (!member) return;
+
+    const nextStatus = member.status === 'active' ? 'suspended' : 'active';
+    try {
+      await updateDoc(doc(db, 'tenants', tenantId, 'staff', memberId), {
+        status: nextStatus
+      });
+
+      if (onAddLog) {
+        onAddLog('RBAC 权限守卫', '⚠️', `主体「${member.name}」已被安全调配，状态更新为: [${nextStatus.toUpperCase()}]`, 'warn');
       }
-      return m;
-    });
-    saveMembers(updated);
+    } catch (err) {
+      console.error("Error toggling staff status:", err);
+    }
   };
 
-  const handleDeleteMember = (memberId: string, memberName: string) => {
-    const updated = members.filter(m => m.id !== memberId);
-    saveMembers(updated);
-    if (onAddLog) {
-      onAddLog('RBAC 权限守卫', '🗑️', `成功吊销了员工「${memberName}」对应的 SaaS 所有子级访问凭准。`, 'warn');
+  const handleDeleteMember = async (memberId: string, memberName: string) => {
+    try {
+      await deleteDoc(doc(db, 'tenants', tenantId, 'staff', memberId));
+      if (onAddLog) {
+        onAddLog('RBAC 权限守卫', '🗑️', `成功吊销了员工「${memberName}」对应的 SaaS 所有子级访问凭准。`, 'warn');
+      }
+    } catch (err) {
+      console.error("Error deleting staff:", err);
     }
   };
 

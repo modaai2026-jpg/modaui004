@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { IndustryData, PricingPlan } from '../types';
 import { INDUSTRIES, PRICING_PLANS } from '../data';
+import { Button } from '../lib/ui';
 
 interface LandingPageProps {
   onStartFlow: (industryId?: string) => void;
@@ -38,12 +39,14 @@ export default function LandingPage({ onStartFlow, onSelectIndustry }: LandingPa
               控制面板
             </button>
             <div className="h-4 w-[1px] bg-[#2F3336]"></div>
-            <button 
+            <Button 
               onClick={() => onStartFlow()}
-              className="bg-[#1D9BF0] hover:bg-[#38BDF8] duration-150 text-white font-bold text-xs px-4 py-2 rounded-full border border-transparent shadow-md active:scale-95"
+              variant="primary"
+              size="sm"
+              className="bg-[#1D9BF0] hover:bg-[#38BDF8] rounded-full px-4"
             >
               创建公司
-            </button>
+            </Button>
           </div>
         </div>
       </nav>
@@ -84,13 +87,14 @@ export default function LandingPage({ onStartFlow, onSelectIndustry }: LandingPa
             transition={{ duration: 0.5, delay: 0.25 }}
             className="pt-2"
           >
-            <button
+            <Button
               onClick={() => onStartFlow()}
+              size="lg"
               className="bg-[#1D9BF0] text-white px-10 py-4 rounded-full text-lg font-bold hover:bg-[#38BDF8] transition-all transform active:scale-95 shadow-lg shadow-[#1D9BF0]/10 duration-200 flex items-center justify-center space-x-3.5 mx-auto border border-transparent"
             >
               <span>创建我的公司</span>
               <ArrowRight className="w-5 h-5 text-white/80" />
-            </button>
+            </Button>
           </motion.div>
 
           {/* Dots Separator Bar */}
@@ -374,8 +378,19 @@ export default function LandingPage({ onStartFlow, onSelectIndustry }: LandingPa
             <span>极速部署</span>
           </div>
 
-          <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center items-center">
             <span className="text-white">MODA UI © {new Date().getFullYear()}</span>
+            <span className="text-[#2F3336]">|</span>
+            <button 
+              onClick={() => {
+                window.location.hash = '#/adminx';
+                // 如果在同个页面，强制触发 hashchange 以便 App.tsx 捕获
+                window.dispatchEvent(new HashChangeEvent('hashchange'));
+              }}
+              className="text-zinc-700 hover:text-zinc-500 transition-colors lowercase font-mono text-[9px]"
+            >
+              adminx.gate
+            </button>
             <span className="text-[#2F3336]">|</span>
             <a href="#about" className="hover:text-white transition-colors">关于我们</a>
             <a href="#privacy" className="hover:text-white transition-colors">隐私政策</a>

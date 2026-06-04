@@ -8,9 +8,14 @@ import {
   getDoc as rawGetDoc,
   getDocs as rawGetDocs,
   setDoc as rawSetDoc,
+  addDoc as rawAddDoc,
   updateDoc as rawUpdateDoc,
   deleteDoc as rawDeleteDoc,
-  onSnapshot as rawOnSnapshot
+  onSnapshot as rawOnSnapshot,
+  increment as rawIncrement,
+  serverTimestamp as rawServerTimestamp,
+  where as rawWhere,
+  query as rawQuery
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -21,8 +26,17 @@ let firebaseDb: Firestore | null = null;
 
 // Singleton initialization function
 function initializeFirebase() {
-  // FORCE LOCAL DATABASE MODE - DISABLE FIREBASE NETWORK REQUESTS
-  return { firebaseApp: null, firebaseAuth: null, firebaseDb: null };
+  if (!firebaseApp) {
+    try {
+      firebaseApp = initializeApp(firebaseConfig);
+      firebaseAuth = getAuth(firebaseApp);
+      firebaseDb = getFirestore(firebaseApp);
+    } catch (error) {
+      console.error("Firebase initialization failed:", error);
+      // Fallback to null but log error
+    }
+  }
+  return { firebaseApp, firebaseAuth, firebaseDb };
 }
 
 // Lazy initialize on first access
@@ -144,7 +158,10 @@ export function collection(dbInstance: any, path: string, ...pathSegments: strin
   // Intercept and validate industry access
   validateIndustryAccess(targetCol);
 
-  return rawCollection(dbInstance, targetCol, ...mapped.slice(1));
+  if (mapped.length > 1) {
+    return (rawCollection as any)(dbInstance, targetCol, ...mapped.slice(1));
+  }
+  return rawCollection(dbInstance, targetCol);
 }
 
 // Wrapper for doc with validation
@@ -156,7 +173,10 @@ export function doc(dbInstance: any, path: string, ...pathSegments: string[]): a
   // Intercept and validate industry access
   validateIndustryAccess(targetCol);
 
-  return rawDoc(dbInstance, targetCol, ...mapped.slice(1));
+  if (mapped.length > 1) {
+    return (rawDoc as any)(dbInstance, targetCol, ...mapped.slice(1));
+  }
+  return rawDoc(dbInstance, targetCol);
 }
 
 // Advanced CRUD Interceptors for airtight security
@@ -175,9 +195,14 @@ export async function setDoc(documentRef: any, data: any, options?: any) {
   return await rawSetDoc(documentRef, data, options);
 }
 
+export async function addDoc(collectionRef: any, data: any) {
+  validateRef(collectionRef);
+  return await rawAddDoc(collectionRef, data);
+}
+
 export async function updateDoc(documentRef: any, ...args: any[]) {
   validateRef(documentRef);
-  return await rawUpdateDoc(documentRef, ...args);
+  return await (rawUpdateDoc as any)(documentRef, ...args);
 }
 
 export async function deleteDoc(documentRef: any) {
@@ -185,9 +210,26 @@ export async function deleteDoc(documentRef: any) {
   return await rawDeleteDoc(documentRef);
 }
 
+export function increment(n: number) {
+  return rawIncrement(n);
+}
+
+export function serverTimestamp() {
+  return rawServerTimestamp();
+}
+
+export function where(...args: any[]) {
+  return (rawWhere as any)(...args);
+}
+
+export function query(reference: any, ...args: any[]) {
+  validateRef(reference);
+  return (rawQuery as any)(reference, ...args);
+}
+
 export function onSnapshot(reference: any, ...args: any[]) {
   validateRef(reference);
-  return rawOnSnapshot(reference, ...args);
+  return (rawOnSnapshot as any)(reference, ...args);
 }
 
 // ============================================

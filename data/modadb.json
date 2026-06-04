@@ -15,6 +15,58 @@
       "quotaLimit": 5200,
       "quotaUsed": 0,
       "billingStatus": "paid"
+    },
+    {
+      "id": "mer_u4w23j3q5",
+      "quotaLimit": 5000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "mer_52ouosa60",
+      "quotaLimit": 5000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "mer_djmbj3ru0",
+      "quotaLimit": 5000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "mer_w6jp0yjc3",
+      "quotaLimit": 5000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "mer_8ynhqfnn0",
+      "quotaLimit": 5000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "mer_ecf1nx4bn",
+      "quotaLimit": 5000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "audit_store_1780579589666_modaui_test",
+      "quotaLimit": 3000,
+      "quotaUsed": 0,
+      "billingStatus": "paid"
+    },
+    {
+      "id": "mer_test_k86r9s",
+      "quotaLimit": 1500,
+      "quotaUsed": 0,
+      "billingStatus": "paid",
+      "globalSettings": {
+        "maintenanceMode": false,
+        "allowRegistration": true
+      }
     }
   ],
   "merchants": [
@@ -33,9 +85,289 @@
       "status": "active",
       "billingPlan": "growth",
       "createdAt": "2026-06-04T01:39:28.187Z"
+    },
+    {
+      "id": "mer_u4w23j3q5",
+      "name": "Audit Merchant 1780579315517",
+      "ownerId": "audit-admin+1780579315517@modaui.test",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T13:21:55.621Z"
+    },
+    {
+      "id": "mer_52ouosa60",
+      "name": "Audit Merchant 1780579398550",
+      "ownerId": "audit-admin+1780579398550@modaui.test",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T13:23:18.651Z"
+    },
+    {
+      "id": "mer_djmbj3ru0",
+      "name": "Audit Merchant 1780579470242",
+      "ownerId": "audit-admin+1780579470242@modaui.test",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T13:24:30.343Z"
+    },
+    {
+      "id": "mer_w6jp0yjc3",
+      "name": "Manual Test Merchant",
+      "ownerId": "audit-admin-test@modaui.test",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T13:25:06.937Z"
+    },
+    {
+      "id": "mer_8ynhqfnn0",
+      "name": "Debug Merchant",
+      "ownerId": "audit-admin-debug@modaui.test",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T13:25:39.031Z"
+    },
+    {
+      "id": "mer_ecf1nx4bn",
+      "name": "Audit Merchant 1780579589666",
+      "ownerId": "audit-admin+1780579589666@modaui.test",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T13:26:29.780Z"
+    },
+    {
+      "id": "audit_store_1780579589666_modaui_test",
+      "name": "Audit Store 1780579589666",
+      "ownerId": "audit-store+1780579589666@modaui.test",
+      "status": "active",
+      "billingPlan": "free",
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    },
+    {
+      "id": "mer_test_k86r9s",
+      "name": "SmokeTest Merchant",
+      "ownerId": "owner@smoketest",
+      "status": "active",
+      "billingPlan": "growth",
+      "createdAt": "2026-06-04T14:46:14.217Z"
     }
   ],
   "audit_logs": [
+    {
+      "id": "ald_ojjvhtl",
+      "timestamp": "2026-06-04T14:46:14.217Z",
+      "userId": "system",
+      "username": "system",
+      "action": "SMOKE_TEST_CREATE",
+      "component": "SMOKE",
+      "details": "Created tenant mer_test_k86r9s"
+    },
+    {
+      "id": "03c403ee-57db-4845-b219-200cb2f161ca",
+      "timestamp": "2026-06-04T13:26:29.786Z",
+      "userId": "audit-store+1780579589666@modaui.test",
+      "username": "audit-store+1780579589666@modaui.test",
+      "action": "TENANT_INITIALIZE",
+      "component": "TENANT_ENGINE",
+      "details": "企业智体自动运营中枢彻底完成就绪：成功部署 4 名 AI 独立特遣岗位专家、SPU供货名录、以及 3 个 RAG 加固底座文件。"
+    },
+    {
+      "id": "8da991dc-63b1-4666-af9a-510e7916cd17",
+      "timestamp": "2026-06-04T13:26:29.781Z",
+      "userId": "audit-admin+1780579589666@modaui.test",
+      "username": "SYSTEM",
+      "action": "NOTIFICATION_MERCHANT_CREATED",
+      "component": "TENANT_ENGINE",
+      "details": "商户已创建：Audit Merchant 1780579589666 (mer_ecf1nx4bn)"
+    },
+    {
+      "id": "b7d47de5-353c-49a5-a156-1460d986a94a",
+      "timestamp": "2026-06-04T13:26:29.781Z",
+      "userId": "audit-admin+1780579589666@modaui.test",
+      "username": "SYSTEM",
+      "action": "MERCHANT_CREATE",
+      "component": "TENANT_ENGINE",
+      "details": "Merchant created: Audit Merchant 1780579589666 (mer_ecf1nx4bn)"
+    },
+    {
+      "id": "6477fdf8-a474-4f84-be23-3697440500b6",
+      "timestamp": "2026-06-04T13:26:29.773Z",
+      "userId": "usr_wxyesip0q",
+      "username": "Audit Admin",
+      "action": "NOTIFICATION_NEW_USER_REGISTERED",
+      "component": "AUTH",
+      "details": "新用户已注册：audit-admin+1780579589666@modaui.test"
+    },
+    {
+      "id": "ce04f7a4-5132-421a-8fb2-0b8b00db9714",
+      "timestamp": "2026-06-04T13:26:29.771Z",
+      "userId": "usr_wxyesip0q",
+      "username": "Audit Admin",
+      "action": "USER_REGISTER",
+      "component": "AUTH",
+      "details": "User registration successful: audit-admin+1780579589666@modaui.test"
+    },
+    {
+      "id": "d5394763-663d-46a1-9457-ba7c51d5a217",
+      "timestamp": "2026-06-04T13:25:39.032Z",
+      "userId": "audit-admin-debug@modaui.test",
+      "username": "SYSTEM",
+      "action": "NOTIFICATION_MERCHANT_CREATED",
+      "component": "TENANT_ENGINE",
+      "details": "商户已创建：Debug Merchant (mer_8ynhqfnn0)"
+    },
+    {
+      "id": "941de406-a94f-4e40-8604-173a0ce1d32f",
+      "timestamp": "2026-06-04T13:25:39.032Z",
+      "userId": "audit-admin-debug@modaui.test",
+      "username": "SYSTEM",
+      "action": "MERCHANT_CREATE",
+      "component": "TENANT_ENGINE",
+      "details": "Merchant created: Debug Merchant (mer_8ynhqfnn0)"
+    },
+    {
+      "id": "28ae1098-83b8-41f5-8953-e393c842936e",
+      "timestamp": "2026-06-04T13:25:39.027Z",
+      "userId": "usr_y9t1jff2q",
+      "username": "Audit Admin",
+      "action": "NOTIFICATION_NEW_USER_REGISTERED",
+      "component": "AUTH",
+      "details": "新用户已注册：audit-admin-debug@modaui.test"
+    },
+    {
+      "id": "9825c336-3bdf-4cef-8699-be114556783c",
+      "timestamp": "2026-06-04T13:25:39.027Z",
+      "userId": "usr_y9t1jff2q",
+      "username": "Audit Admin",
+      "action": "USER_REGISTER",
+      "component": "AUTH",
+      "details": "User registration successful: audit-admin-debug@modaui.test"
+    },
+    {
+      "id": "ddbcf4d7-a40c-4912-8dd7-03ff7ec04e63",
+      "timestamp": "2026-06-04T13:25:06.937Z",
+      "userId": "audit-admin-test@modaui.test",
+      "username": "SYSTEM",
+      "action": "NOTIFICATION_MERCHANT_CREATED",
+      "component": "TENANT_ENGINE",
+      "details": "商户已创建：Manual Test Merchant (mer_w6jp0yjc3)"
+    },
+    {
+      "id": "57316ff1-0088-4f86-b8f6-68e593c7cd47",
+      "timestamp": "2026-06-04T13:25:06.937Z",
+      "userId": "audit-admin-test@modaui.test",
+      "username": "SYSTEM",
+      "action": "MERCHANT_CREATE",
+      "component": "TENANT_ENGINE",
+      "details": "Merchant created: Manual Test Merchant (mer_w6jp0yjc3)"
+    },
+    {
+      "id": "b6fd7ae0-da55-4b79-9b0b-ef0bb34eab1d",
+      "timestamp": "2026-06-04T13:25:06.932Z",
+      "userId": "usr_gokn1p7dt",
+      "username": "Audit Admin",
+      "action": "NOTIFICATION_NEW_USER_REGISTERED",
+      "component": "AUTH",
+      "details": "新用户已注册：audit-admin-test@modaui.test"
+    },
+    {
+      "id": "8133f447-e486-4d98-9b3d-7eaf13e003bb",
+      "timestamp": "2026-06-04T13:25:06.930Z",
+      "userId": "usr_gokn1p7dt",
+      "username": "Audit Admin",
+      "action": "USER_REGISTER",
+      "component": "AUTH",
+      "details": "User registration successful: audit-admin-test@modaui.test"
+    },
+    {
+      "id": "cc8123df-6029-4d5a-bd2c-2e96a526b983",
+      "timestamp": "2026-06-04T13:24:30.344Z",
+      "userId": "audit-admin+1780579470242@modaui.test",
+      "username": "SYSTEM",
+      "action": "NOTIFICATION_MERCHANT_CREATED",
+      "component": "TENANT_ENGINE",
+      "details": "商户已创建：Audit Merchant 1780579470242 (mer_djmbj3ru0)"
+    },
+    {
+      "id": "dd954f59-b3dc-4980-83ce-95054b22b003",
+      "timestamp": "2026-06-04T13:24:30.344Z",
+      "userId": "audit-admin+1780579470242@modaui.test",
+      "username": "SYSTEM",
+      "action": "MERCHANT_CREATE",
+      "component": "TENANT_ENGINE",
+      "details": "Merchant created: Audit Merchant 1780579470242 (mer_djmbj3ru0)"
+    },
+    {
+      "id": "82045bd7-efaa-4d79-852e-6daa454cab69",
+      "timestamp": "2026-06-04T13:24:30.334Z",
+      "userId": "usr_h9mxgo0ys",
+      "username": "Audit Admin",
+      "action": "NOTIFICATION_NEW_USER_REGISTERED",
+      "component": "AUTH",
+      "details": "新用户已注册：audit-admin+1780579470242@modaui.test"
+    },
+    {
+      "id": "2a3dd46e-1767-45f6-881c-e720f78dfe75",
+      "timestamp": "2026-06-04T13:24:30.332Z",
+      "userId": "usr_h9mxgo0ys",
+      "username": "Audit Admin",
+      "action": "USER_REGISTER",
+      "component": "AUTH",
+      "details": "User registration successful: audit-admin+1780579470242@modaui.test"
+    },
+    {
+      "id": "76b350fe-2621-433b-a245-9ac9c3e69345",
+      "timestamp": "2026-06-04T13:23:18.651Z",
+      "userId": "audit-admin+1780579398550@modaui.test",
+      "username": "SYSTEM",
+      "action": "MERCHANT_CREATE",
+      "component": "TENANT_ENGINE",
+      "details": "Merchant created: Audit Merchant 1780579398550 (mer_52ouosa60)"
+    },
+    {
+      "id": "6767419c-7593-4caa-965d-0b3f9b4ffaa7",
+      "timestamp": "2026-06-04T13:23:18.644Z",
+      "userId": "usr_3zthdne5c",
+      "username": "Audit Admin",
+      "action": "NOTIFICATION_NEW_USER_REGISTERED",
+      "component": "AUTH",
+      "details": "新用户已注册：audit-admin+1780579398550@modaui.test"
+    },
+    {
+      "id": "e4c2c101-7775-4f7c-a581-3f6334da8c09",
+      "timestamp": "2026-06-04T13:23:18.642Z",
+      "userId": "usr_3zthdne5c",
+      "username": "Audit Admin",
+      "action": "USER_REGISTER",
+      "component": "AUTH",
+      "details": "User registration successful: audit-admin+1780579398550@modaui.test"
+    },
+    {
+      "id": "fecd55ce-9e9a-4bdc-98d6-1c1077dbc51d",
+      "timestamp": "2026-06-04T13:21:55.621Z",
+      "userId": "audit-admin+1780579315517@modaui.test",
+      "username": "SYSTEM",
+      "action": "MERCHANT_CREATE",
+      "component": "TENANT_ENGINE",
+      "details": "Merchant created: Audit Merchant 1780579315517 (mer_u4w23j3q5)"
+    },
+    {
+      "id": "7d6f703d-2434-4e8b-838e-fda5cb4cc19a",
+      "timestamp": "2026-06-04T13:21:55.614Z",
+      "userId": "usr_mm11n42df",
+      "username": "Audit Admin",
+      "action": "NOTIFICATION_NEW_USER_REGISTERED",
+      "component": "AUTH",
+      "details": "新用户已注册：audit-admin+1780579315517@modaui.test"
+    },
+    {
+      "id": "da660945-7a0a-484f-8062-52f593aa565c",
+      "timestamp": "2026-06-04T13:21:55.614Z",
+      "userId": "usr_mm11n42df",
+      "username": "Audit Admin",
+      "action": "USER_REGISTER",
+      "component": "AUTH",
+      "details": "User registration successful: audit-admin+1780579315517@modaui.test"
+    },
     {
       "id": "43d3a5fc-465b-4f23-80b8-0e70aca801d0",
       "timestamp": "2026-06-04T02:23:20.310Z",
@@ -87,6 +419,13 @@
       "add": 200,
       "reason": "smoke_increase",
       "createdAt": "2026-06-04T01:39:32.299Z"
+    },
+    {
+      "id": "qal_b1htx15",
+      "tenantId": "mer_test_k86r9s",
+      "add": 1000,
+      "reason": "smoke_test",
+      "createdAt": "2026-06-04T14:46:14.218Z"
     }
   ],
   "users": [
@@ -108,6 +447,66 @@
       "verified": true,
       "createdAt": "2026-06-04T02:23:20.310Z",
       "metadata": {}
+    },
+    {
+      "id": "usr_mm11n42df",
+      "username": "Audit Admin",
+      "email": "audit-admin+1780579315517@modaui.test",
+      "passwordHash": "$2b$10$Uh883XUpjwpxXpvrhtsKMuGuAkCTU46sOAYV/3sgwp430GVKl7uQi",
+      "role": "Platform Admin",
+      "verified": true,
+      "createdAt": "2026-06-04T13:21:55.613Z",
+      "metadata": {}
+    },
+    {
+      "id": "usr_3zthdne5c",
+      "username": "Audit Admin",
+      "email": "audit-admin+1780579398550@modaui.test",
+      "passwordHash": "$2b$10$B003Ex2eXewYEWVwKWmEoeP9dB5mZ4KIxqaxSjR8dFwPBehOvbmlu",
+      "role": "Platform Admin",
+      "verified": true,
+      "createdAt": "2026-06-04T13:23:18.642Z",
+      "metadata": {}
+    },
+    {
+      "id": "usr_h9mxgo0ys",
+      "username": "Audit Admin",
+      "email": "audit-admin+1780579470242@modaui.test",
+      "passwordHash": "$2b$10$NMVGeBszk4ic43MrliIqpuj5v6NHurQ8zBQnGFRVit65rWAl5cLOm",
+      "role": "Platform Admin",
+      "verified": true,
+      "createdAt": "2026-06-04T13:24:30.331Z",
+      "metadata": {}
+    },
+    {
+      "id": "usr_gokn1p7dt",
+      "username": "Audit Admin",
+      "email": "audit-admin-test@modaui.test",
+      "passwordHash": "$2b$10$vtMY0PWoHa0j.AZb92CaE.i9VyAW4OyGba6otku3KI8a9ZY4KLLFC",
+      "role": "Platform Admin",
+      "verified": true,
+      "createdAt": "2026-06-04T13:25:06.930Z",
+      "metadata": {}
+    },
+    {
+      "id": "usr_y9t1jff2q",
+      "username": "Audit Admin",
+      "email": "audit-admin-debug@modaui.test",
+      "passwordHash": "$2b$10$TVeX0digCDbGHaCVZQ6zJOYPDP.SADvz5p1Ul2EalGqHMLULLaHZG",
+      "role": "Platform Admin",
+      "verified": true,
+      "createdAt": "2026-06-04T13:25:39.026Z",
+      "metadata": {}
+    },
+    {
+      "id": "usr_wxyesip0q",
+      "username": "Audit Admin",
+      "email": "audit-admin+1780579589666@modaui.test",
+      "passwordHash": "$2b$10$6Exk0ZlVH7OTBiYFFj8n4.jcRDoo/78EsJbjMYQEK1M6m0KlaPyA6",
+      "role": "Platform Admin",
+      "verified": true,
+      "createdAt": "2026-06-04T13:26:29.770Z",
+      "metadata": {}
     }
   ],
   "sessions": [
@@ -120,6 +519,36 @@
       "id": "sess_b8hcy0zxr27",
       "userId": "usr_r7gwxubjf",
       "expiresAt": "2026-06-05T02:23:20.310Z"
+    },
+    {
+      "id": "sess_40feakb0ce5",
+      "userId": "usr_mm11n42df",
+      "expiresAt": "2026-06-05T13:21:55.613Z"
+    },
+    {
+      "id": "sess_05q36trcoczn",
+      "userId": "usr_3zthdne5c",
+      "expiresAt": "2026-06-05T13:23:18.642Z"
+    },
+    {
+      "id": "sess_shtec1t97rt",
+      "userId": "usr_h9mxgo0ys",
+      "expiresAt": "2026-06-05T13:24:30.331Z"
+    },
+    {
+      "id": "sess_5o0cutidvbs",
+      "userId": "usr_gokn1p7dt",
+      "expiresAt": "2026-06-05T13:25:06.930Z"
+    },
+    {
+      "id": "sess_a9fl32jfnom",
+      "userId": "usr_y9t1jff2q",
+      "expiresAt": "2026-06-05T13:25:39.026Z"
+    },
+    {
+      "id": "sess_k0t3isahvi",
+      "userId": "usr_wxyesip0q",
+      "expiresAt": "2026-06-05T13:26:29.770Z"
     }
   ],
   "stores": [
@@ -266,16 +695,167 @@
         "bannerText": "欢迎来到 示例店铺 12"
       },
       "createdAt": "2026-06-04T01:50:01.028Z"
+    },
+    {
+      "id": "sto_audit_store_1780579589666_modaui_test",
+      "merchantId": "audit_store_1780579589666_modaui_test",
+      "name": "Audit Store 1780579589666",
+      "domain": "audit_store_1780579589666_modaui_test.modaui.com",
+      "branding": {
+        "logo": "📦",
+        "colorTheme": "classic",
+        "bannerText": "欢迎光临 Audit Store 1780579589666 智体店样板！"
+      },
+      "createdAt": "2026-06-04T13:26:29.785Z"
     }
   ],
-  "products": [],
+  "products": [
+    {
+      "id": "prod_l0eq5ucqk",
+      "storeId": "sto_audit_store_1780579589666_modaui_test",
+      "name": "磨砂吸饱高硅玻璃马克杯 (Vara 特荐书签款)",
+      "category": "生活家居",
+      "price": 29,
+      "inventory": 200,
+      "sku": "SKU-RETAIL-N6TZYU",
+      "variant": {},
+      "images": [
+        "🥛"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    },
+    {
+      "id": "prod_jtkweq276",
+      "storeId": "sto_audit_store_1780579589666_modaui_test",
+      "name": "三层隔热高密封防漏竹纤维饭盒",
+      "category": "时尚厨具",
+      "price": 49,
+      "inventory": 150,
+      "sku": "SKU-RETAIL-DYJGFP",
+      "variant": {},
+      "images": [
+        "🍱"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    },
+    {
+      "id": "prod_kbgg3a2lo",
+      "storeId": "sto_audit_store_1780579589666_modaui_test",
+      "name": "极低空噪超纯声波电动牙刷 (Dax 跟单选型)",
+      "category": "智体个护",
+      "price": 129,
+      "inventory": 70,
+      "sku": "SKU-RETAIL-6LCY4M",
+      "variant": {},
+      "images": [
+        "🪥"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    }
+  ],
   "carts": [],
   "orders": [],
   "payments": [],
-  "finance": [],
-  "ai_teams": [],
-  "ai_agents": [],
-  "kb_chunks": [],
+  "finance": [
+    {
+      "id": "FIN-554980",
+      "merchantId": "audit_store_1780579589666_modaui_test",
+      "type": "revenue",
+      "amount": 3200,
+      "description": "系统上线预热活动订单交易收益",
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    }
+  ],
+  "ai_teams": [
+    {
+      "id": "team_audit_store_1780579589666_modaui_test",
+      "merchantId": "audit_store_1780579589666_modaui_test",
+      "name": "Audit Store 1780579589666专家智体委员会",
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    }
+  ],
+  "ai_agents": [
+    {
+      "id": "agt_audit_store_1780579589666_modaui_test_Vara",
+      "teamId": "team_audit_store_1780579589666_modaui_test",
+      "name": "Vara",
+      "role": "AI选品经理 Vara",
+      "systemPrompt": "你已受雇为 Audit Store 1780579589666 的专属【AI选品经理】。岗位职责：选定亚马逊热榜飙升百货。对比国内拼多多/1688等高溢价渠道，优化起价及保价险配置。\n\n当前团队执行的运营策略是：Audit Store Launch（Generates a store and tenant assets for realtime audit.）。请极力贯彻执行，让商铺业绩持续攀升。",
+      "status": "idle",
+      "memoryContext": [
+        "于 2026-06-04T13:26:29.785Z 系统安全初始化就绪。岗位口号与授权契约已部署完毕。"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    },
+    {
+      "id": "agt_audit_store_1780579589666_modaui_test_Dax",
+      "teamId": "team_audit_store_1780579589666_modaui_test",
+      "name": "Dax",
+      "role": "AI库存经理 Dax",
+      "systemPrompt": "你已受雇为 Audit Store 1780579589666 的专属【AI库存经理】。岗位职责：对接代加工厂，自动化检索国内货品拼集拼仓跟踪，跟单并警示揽派延误。\n\n当前团队执行的运营策略是：Audit Store Launch（Generates a store and tenant assets for realtime audit.）。请极力贯彻执行，让商铺业绩持续攀升。",
+      "status": "idle",
+      "memoryContext": [
+        "于 2026-06-04T13:26:29.785Z 系统安全初始化就绪。岗位口号与授权契约已部署完毕。"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    },
+    {
+      "id": "agt_audit_store_1780579589666_modaui_test_Nova",
+      "teamId": "team_audit_store_1780579589666_modaui_test",
+      "name": "Nova",
+      "role": "AI营销经理 Nova",
+      "systemPrompt": "你已受雇为 Audit Store 1780579589666 的专属【AI营销经理】。岗位职责：拟定百日精推首发单。输出高转化引引流直通车方案，优化每日竞价ROI。\n\n当前团队执行的运营策略是：Audit Store Launch（Generates a store and tenant assets for realtime audit.）。请极力贯彻执行，让商铺业绩持续攀升。",
+      "status": "idle",
+      "memoryContext": [
+        "于 2026-06-04T13:26:29.785Z 系统安全初始化就绪。岗位口号与授权契约已部署完毕。"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    },
+    {
+      "id": "agt_audit_store_1780579589666_modaui_test_Tate",
+      "teamId": "team_audit_store_1780579589666_modaui_test",
+      "name": "Tate",
+      "role": "AI运营经理 Tate",
+      "systemPrompt": "你已受雇为 Audit Store 1780579589666 的专属【AI运营经理】。岗位职责：闲鱼/微店铺货。合并日出单入账，友好协商物流损坏先行核退等争夺安抚。\n\n当前团队执行的运营策略是：Audit Store Launch（Generates a store and tenant assets for realtime audit.）。请极力贯彻执行，让商铺业绩持续攀升。",
+      "status": "idle",
+      "memoryContext": [
+        "于 2026-06-04T13:26:29.785Z 系统安全初始化就绪。岗位口号与授权契约已部署完毕。"
+      ],
+      "createdAt": "2026-06-04T13:26:29.785Z"
+    }
+  ],
+  "kb_chunks": [
+    {
+      "id": "chk_audit_store_1780579589666_modaui_test_1",
+      "merchantId": "audit_store_1780579589666_modaui_test",
+      "title": "Audit Store 1780579589666 商业愿景与经营守则",
+      "content": "本企业名为：Audit Store 1780579589666。\n创始人及企业主：audit-store+1780579589666@modaui.test。\n行业定位与特种行业背景：retail。\n公司战略策略定位是：Audit Store Launch（Generates a store and tenant assets for realtime audit.）。\n所有智体员工在向顾客提供解答或协助管理店铺时，必须以此策略为指导原则，遵守服务纪律。",
+      "tokenCount": 220,
+      "version": 1,
+      "createdAt": "2026-06-04T13:26:29.785Z",
+      "vector": null
+    },
+    {
+      "id": "chk_audit_store_1780579589666_modaui_test_2",
+      "merchantId": "audit_store_1780579589666_modaui_test",
+      "title": "顺丰速运一件代发极速分发履约标准",
+      "content": "公司为保障配送时效已与《顺丰速运》达成官方特惠寄递协议。\n前台店面所有买单订单，系统运营主管（如Cyrus/Lulu等）将无缝执行打包及一键传单顺丰派发航空专件。\n若出现揽收超时或揽派延误，平台将启动首单免首重和 ¥15 延时关怀专属优惠。",
+      "tokenCount": 180,
+      "version": 1,
+      "createdAt": "2026-06-04T13:26:29.785Z",
+      "vector": null
+    },
+    {
+      "id": "chk_audit_store_1780579589666_modaui_test_3",
+      "merchantId": "audit_store_1780579589666_modaui_test",
+      "title": "顾客退款退货阻拦、安抚与客情公关条例",
+      "content": "对于前台申请退款的顾客，客服智体员工须执行主动安抚和快速响应。\n如出现质检争议或错发：首单新客直接发起 ¥10 折扣福利补偿并建议保退，或直接免退货仅极速原件补发。\n凡遭遇不合理投诉，系统主管均启动客情调停，快速纠葛，保留品牌口碑。",
+      "tokenCount": 210,
+      "version": 1,
+      "createdAt": "2026-06-04T13:26:29.785Z",
+      "vector": null
+    }
+  ],
   "agent_tasks": [],
   "appInstallations": [],
   "campaigns": [],
@@ -294,5 +874,654 @@
   "wallets": [],
   "giftCards": [],
   "subscriptions": [],
-  "transactions": []
+  "transactions": [],
+  "notifications": [
+    {
+      "id": "d0871b2d-0724-445b-825e-924e68235510",
+      "timestamp": "2026-06-04T13:26:29.781Z",
+      "level": "info",
+      "title": "Merchant Created",
+      "message": "商户已创建：Audit Merchant 1780579589666 (mer_ecf1nx4bn)",
+      "userId": "audit-admin+1780579589666@modaui.test",
+      "username": "SYSTEM",
+      "component": "TENANT_ENGINE",
+      "target": "admin",
+      "tenantId": "mer_ecf1nx4bn",
+      "read": false
+    },
+    {
+      "id": "dc2fc0ab-6cb2-4637-9c84-20457513ccaf",
+      "timestamp": "2026-06-04T13:26:29.773Z",
+      "level": "info",
+      "title": "New User Registered",
+      "message": "新用户已注册：audit-admin+1780579589666@modaui.test",
+      "userId": "usr_wxyesip0q",
+      "username": "Audit Admin",
+      "component": "AUTH",
+      "target": "admin",
+      "read": false
+    },
+    {
+      "id": "e86853b8-8919-40cd-8bf9-4a7c4197b8e2",
+      "timestamp": "2026-06-04T13:25:39.032Z",
+      "level": "info",
+      "title": "Merchant Created",
+      "message": "商户已创建：Debug Merchant (mer_8ynhqfnn0)",
+      "userId": "audit-admin-debug@modaui.test",
+      "username": "SYSTEM",
+      "component": "TENANT_ENGINE",
+      "target": "mer_8ynhqfnn0",
+      "read": false
+    },
+    {
+      "id": "c13abf8a-388a-4025-8020-96257cb046b5",
+      "timestamp": "2026-06-04T13:25:39.027Z",
+      "level": "info",
+      "title": "New User Registered",
+      "message": "新用户已注册：audit-admin-debug@modaui.test",
+      "userId": "usr_y9t1jff2q",
+      "username": "Audit Admin",
+      "component": "AUTH",
+      "target": "admin",
+      "read": false
+    },
+    {
+      "id": "b4554e15-ea13-4af0-8dd4-4f359c724ed6",
+      "timestamp": "2026-06-04T13:25:06.937Z",
+      "level": "info",
+      "title": "Merchant Created",
+      "message": "商户已创建：Manual Test Merchant (mer_w6jp0yjc3)",
+      "userId": "audit-admin-test@modaui.test",
+      "username": "SYSTEM",
+      "component": "TENANT_ENGINE",
+      "target": "mer_w6jp0yjc3",
+      "read": false
+    },
+    {
+      "id": "6b49b61f-d447-4b64-ab1e-baaf33db7d9e",
+      "timestamp": "2026-06-04T13:25:06.932Z",
+      "level": "info",
+      "title": "New User Registered",
+      "message": "新用户已注册：audit-admin-test@modaui.test",
+      "userId": "usr_gokn1p7dt",
+      "username": "Audit Admin",
+      "component": "AUTH",
+      "target": "admin",
+      "read": false
+    },
+    {
+      "id": "f374a923-1ada-4662-8940-d4c5191fd3e7",
+      "timestamp": "2026-06-04T13:24:30.344Z",
+      "level": "info",
+      "title": "Merchant Created",
+      "message": "商户已创建：Audit Merchant 1780579470242 (mer_djmbj3ru0)",
+      "userId": "audit-admin+1780579470242@modaui.test",
+      "username": "SYSTEM",
+      "component": "TENANT_ENGINE",
+      "target": "mer_djmbj3ru0",
+      "read": false
+    },
+    {
+      "id": "04b705ae-e006-4735-a856-b03e305d4f9b",
+      "timestamp": "2026-06-04T13:24:30.334Z",
+      "level": "info",
+      "title": "New User Registered",
+      "message": "新用户已注册：audit-admin+1780579470242@modaui.test",
+      "userId": "usr_h9mxgo0ys",
+      "username": "Audit Admin",
+      "component": "AUTH",
+      "target": "admin",
+      "read": false
+    },
+    {
+      "id": "696d9a71-61ae-4e96-9038-99f799282f64",
+      "timestamp": "2026-06-04T13:23:18.644Z",
+      "level": "info",
+      "title": "New User Registered",
+      "message": "新用户已注册：audit-admin+1780579398550@modaui.test",
+      "userId": "usr_3zthdne5c",
+      "username": "Audit Admin",
+      "component": "AUTH",
+      "target": "admin",
+      "read": false
+    },
+    {
+      "id": "b5768804-59a8-4365-94da-d4e75451ce53",
+      "timestamp": "2026-06-04T13:21:55.614Z",
+      "level": "info",
+      "title": "New User Registered",
+      "message": "新用户已注册：audit-admin+1780579315517@modaui.test",
+      "userId": "usr_mm11n42df",
+      "username": "Audit Admin",
+      "component": "AUTH",
+      "target": "admin",
+      "read": false
+    }
+  ],
+  "events": [
+    {
+      "id": "1c21172d-ac0f-4b42-b2d6-a0880c23cb57",
+      "type": "MERCHANT_CREATED",
+      "payload": {
+        "merchantId": "mer_ecf1nx4bn",
+        "name": "Audit Merchant 1780579589666",
+        "ownerId": "audit-admin+1780579589666@modaui.test",
+        "billingPlan": "growth"
+      },
+      "source": "TENANT_ENGINE",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:26:29.782Z",
+      "metadata": {
+        "tenantId": "mer_ecf1nx4bn"
+      }
+    },
+    {
+      "id": "e8266dae-10ab-4f96-9872-f58c79cd2d1a",
+      "type": "USER_REGISTERED",
+      "payload": {
+        "userId": "usr_wxyesip0q",
+        "username": "Audit Admin",
+        "email": "audit-admin+1780579589666@modaui.test",
+        "role": "Platform Admin"
+      },
+      "source": "AUTH",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:26:29.774Z",
+      "metadata": {
+        "tenantId": "platform"
+      }
+    },
+    {
+      "id": "4c4316b4-3d33-45e5-b96f-6ed8983a9962",
+      "type": "MERCHANT_CREATED",
+      "payload": {
+        "merchantId": "mer_8ynhqfnn0",
+        "name": "Debug Merchant",
+        "ownerId": "audit-admin-debug@modaui.test",
+        "billingPlan": "growth"
+      },
+      "source": "TENANT_ENGINE",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:25:39.032Z",
+      "metadata": {
+        "tenantId": "mer_8ynhqfnn0"
+      }
+    },
+    {
+      "id": "4ec1be26-115b-4ca0-aabb-e96786e8513b",
+      "type": "USER_REGISTERED",
+      "payload": {
+        "userId": "usr_y9t1jff2q",
+        "username": "Audit Admin",
+        "email": "audit-admin-debug@modaui.test",
+        "role": "Platform Admin"
+      },
+      "source": "AUTH",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:25:39.028Z",
+      "metadata": {
+        "tenantId": "platform"
+      }
+    },
+    {
+      "id": "203339b6-9425-4b3d-a1bf-4104152624f3",
+      "type": "MERCHANT_CREATED",
+      "payload": {
+        "merchantId": "mer_w6jp0yjc3",
+        "name": "Manual Test Merchant",
+        "ownerId": "audit-admin-test@modaui.test",
+        "billingPlan": "growth"
+      },
+      "source": "TENANT_ENGINE",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:25:06.938Z",
+      "metadata": {
+        "tenantId": "mer_w6jp0yjc3"
+      }
+    },
+    {
+      "id": "212ea973-6e9e-4ae6-89b8-9d4e6794aa5f",
+      "type": "USER_REGISTERED",
+      "payload": {
+        "userId": "usr_gokn1p7dt",
+        "username": "Audit Admin",
+        "email": "audit-admin-test@modaui.test",
+        "role": "Platform Admin"
+      },
+      "source": "AUTH",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:25:06.933Z",
+      "metadata": {
+        "tenantId": "platform"
+      }
+    },
+    {
+      "id": "ccce804a-f06e-4e73-877b-fca0b0971114",
+      "type": "MERCHANT_CREATED",
+      "payload": {
+        "merchantId": "mer_djmbj3ru0",
+        "name": "Audit Merchant 1780579470242",
+        "ownerId": "audit-admin+1780579470242@modaui.test",
+        "billingPlan": "growth"
+      },
+      "source": "TENANT_ENGINE",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:24:30.344Z",
+      "metadata": {
+        "tenantId": "mer_djmbj3ru0"
+      }
+    },
+    {
+      "id": "c9350f6d-1be7-43f9-9f5f-6abf05551d1f",
+      "type": "USER_REGISTERED",
+      "payload": {
+        "userId": "usr_h9mxgo0ys",
+        "username": "Audit Admin",
+        "email": "audit-admin+1780579470242@modaui.test",
+        "role": "Platform Admin"
+      },
+      "source": "AUTH",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:24:30.335Z",
+      "metadata": {
+        "tenantId": "platform"
+      }
+    },
+    {
+      "id": "46fbde46-9da0-4ff0-b7d7-21b06d5013d2",
+      "type": "USER_REGISTERED",
+      "payload": {
+        "userId": "usr_3zthdne5c",
+        "username": "Audit Admin",
+        "email": "audit-admin+1780579398550@modaui.test",
+        "role": "Platform Admin"
+      },
+      "source": "AUTH",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:23:18.645Z",
+      "metadata": {
+        "tenantId": "platform"
+      }
+    },
+    {
+      "id": "a4f55a29-079f-4118-8085-266243e25d6b",
+      "type": "USER_REGISTERED",
+      "payload": {
+        "userId": "usr_mm11n42df",
+        "username": "Audit Admin",
+        "email": "audit-admin+1780579315517@modaui.test",
+        "role": "Platform Admin"
+      },
+      "source": "AUTH",
+      "component": "EVENT_BUS",
+      "status": "published",
+      "publishedAt": "2026-06-04T13:21:55.615Z",
+      "metadata": {
+        "tenantId": "platform"
+      }
+    }
+  ],
+  "agents": [],
+  "invoices": [],
+  "platformSettings": {
+    "maintenanceMode": false,
+    "allowRegistration": true,
+    "defaultQuotaLimit": 10000,
+    "activeSystemVersion": "v3.0.0 Stable Enterprise",
+    "supportedPaymentGateways": [
+      "Stripe",
+      "Alipay",
+      "WeChatPay",
+      "PayPal"
+    ],
+    "paymentSimulationEnabled": true,
+    "aiConfig": {
+      "defaultModel": "gemini-3.5-flash",
+      "embeddingModel": "gemini-embedding-2-preview",
+      "apiKeys": {}
+    },
+    "features": {
+      "ai_chat": true,
+      "order_sync": true,
+      "multi_tenant": true
+    },
+    "notifications": {
+      "emailEnabled": true,
+      "smsEnabled": false,
+      "webhookEnabled": true
+    },
+    "security": {
+      "twoFactorRequired": false,
+      "sessionTimeout": 3600,
+      "maxLoginAttempts": 5
+    },
+    "branding": {
+      "platformName": "MODAUI",
+      "platformLogo": "📦",
+      "primaryColor": "#1D9BF0"
+    }
+  },
+  "config_registry": [
+    {
+      "id": "reg_platform_maintenanceMode",
+      "module": "platform",
+      "key": "platform.maintenanceMode",
+      "category": "system",
+      "type": "boolean",
+      "default_value": false,
+      "current_value": false,
+      "tenant_scope": "system",
+      "description": "控制全局维护模式是否开启",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_allowRegistration",
+      "module": "platform",
+      "key": "platform.allowRegistration",
+      "category": "system",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "控制是否允许新租户注册",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_defaultQuotaLimit",
+      "module": "platform",
+      "key": "platform.defaultQuotaLimit",
+      "category": "system",
+      "type": "number",
+      "default_value": 10000,
+      "current_value": 10000,
+      "tenant_scope": "system",
+      "description": "默认租户配额限制",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_activeSystemVersion",
+      "module": "platform",
+      "key": "platform.activeSystemVersion",
+      "category": "system",
+      "type": "string",
+      "default_value": "v3.0.0 Stable Enterprise",
+      "current_value": "v3.0.0 Stable Enterprise",
+      "tenant_scope": "system",
+      "description": "当前平台版本标签",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_supportedPaymentGateways",
+      "module": "payment",
+      "key": "platform.supportedPaymentGateways",
+      "category": "payment",
+      "type": "array",
+      "default_value": [
+        "Stripe",
+        "Alipay",
+        "WeChatPay",
+        "PayPal"
+      ],
+      "current_value": [
+        "Stripe",
+        "Alipay",
+        "WeChatPay",
+        "PayPal"
+      ],
+      "tenant_scope": "system",
+      "description": "支持的支付网关列表",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_paymentSimulationEnabled",
+      "module": "payment",
+      "key": "platform.paymentSimulationEnabled",
+      "category": "payment",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "控制支付是否进入仿真模式",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_aiConfig_defaultModel",
+      "module": "ai",
+      "key": "platform.aiConfig.defaultModel",
+      "category": "ai",
+      "type": "string",
+      "default_value": "gemini-3.5-flash",
+      "current_value": "gemini-3.5-flash",
+      "tenant_scope": "system",
+      "description": "默认 AI 推理模型",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_aiConfig_embeddingModel",
+      "module": "ai",
+      "key": "platform.aiConfig.embeddingModel",
+      "category": "ai",
+      "type": "string",
+      "default_value": "gemini-embedding-2-preview",
+      "current_value": "gemini-embedding-2-preview",
+      "tenant_scope": "system",
+      "description": "默认 AI 向量化模型",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_features_ai_chat",
+      "module": "platform",
+      "key": "platform.features.ai_chat",
+      "category": "feature",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "是否启用 AI 聊天功能",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_features_order_sync",
+      "module": "platform",
+      "key": "platform.features.order_sync",
+      "category": "feature",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "控制订单同步功能是否启用",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_features_multi_tenant",
+      "module": "platform",
+      "key": "platform.features.multi_tenant",
+      "category": "feature",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "控制多租户支持是否启用",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_notifications_emailEnabled",
+      "module": "notification",
+      "key": "platform.notifications.emailEnabled",
+      "category": "notification",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "是否启用邮件通知",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_notifications_smsEnabled",
+      "module": "notification",
+      "key": "platform.notifications.smsEnabled",
+      "category": "notification",
+      "type": "boolean",
+      "default_value": false,
+      "current_value": false,
+      "tenant_scope": "system",
+      "description": "是否启用短信通知",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_notifications_webhookEnabled",
+      "module": "notification",
+      "key": "platform.notifications.webhookEnabled",
+      "category": "notification",
+      "type": "boolean",
+      "default_value": true,
+      "current_value": true,
+      "tenant_scope": "system",
+      "description": "是否启用 Webhook 推送",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_security_twoFactorRequired",
+      "module": "security",
+      "key": "platform.security.twoFactorRequired",
+      "category": "security",
+      "type": "boolean",
+      "default_value": false,
+      "current_value": false,
+      "tenant_scope": "system",
+      "description": "是否强制启用二次验证",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_security_sessionTimeout",
+      "module": "security",
+      "key": "platform.security.sessionTimeout",
+      "category": "security",
+      "type": "number",
+      "default_value": 3600,
+      "current_value": 3600,
+      "tenant_scope": "system",
+      "description": "会话超时时间（秒）",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_security_maxLoginAttempts",
+      "module": "security",
+      "key": "platform.security.maxLoginAttempts",
+      "category": "security",
+      "type": "number",
+      "default_value": 5,
+      "current_value": 5,
+      "tenant_scope": "system",
+      "description": "最大登录失败次数",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_branding_platformName",
+      "module": "branding",
+      "key": "platform.branding.platformName",
+      "category": "branding",
+      "type": "string",
+      "default_value": "MODAUI",
+      "current_value": "MODAUI",
+      "tenant_scope": "system",
+      "description": "平台名称",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_branding_platformLogo",
+      "module": "branding",
+      "key": "platform.branding.platformLogo",
+      "category": "branding",
+      "type": "string",
+      "default_value": "📦",
+      "current_value": "📦",
+      "tenant_scope": "system",
+      "description": "平台 Logo",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    },
+    {
+      "id": "reg_platform_branding_primaryColor",
+      "module": "branding",
+      "key": "platform.branding.primaryColor",
+      "category": "branding",
+      "type": "string",
+      "default_value": "#1D9BF0",
+      "current_value": "#1D9BF0",
+      "tenant_scope": "system",
+      "description": "平台主色",
+      "uiPath": "/platform/settings",
+      "required": true,
+      "updated_by": "system",
+      "updated_at": "2026-06-04T00:00:00.000Z"
+    }
+  ],
+  "authTokens": [],
+  "operationalDocuments": []
 }

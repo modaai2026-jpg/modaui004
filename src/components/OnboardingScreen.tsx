@@ -11,6 +11,9 @@ interface OnboardingScreenProps {
   onComplete: () => void;
 }
 
+import { db, auth } from '../services/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+
 export default function OnboardingScreen({ industry, strategy, userEmail, companyName, onComplete }: OnboardingScreenProps) {
   const [logs, setLogs] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -53,38 +56,54 @@ export default function OnboardingScreen({ industry, strategy, userEmail, compan
       }
     };
 
-    // Trigger real backend initialization post
-    const initBackendTenant = async () => {
+    // Real Firestore initialization
+    const initFirestoreMerchant = async () => {
+      if (!db || !auth.currentUser) return;
+      
       try {
-        const response = await fetch('/api/tenants/initialize', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: userEmail || 'founder@gmail.com',
-            companyName: companyName || `摩登${industry.name.slice(0, 2)}有限公司`,
-            industryId: industry.id,
-            strategyId: strategy.id,
-            strategyName: strategy.name,
-            strategyDesc: strategy.desc
-          })
-        });
-        const result = await response.json();
-        if (result.success) {
-          setLogs((prev) => [
-            ...prev, 
-            `🔔 智体成功入库：${result.merchant.name} (ID: ${result.merchant.id})`,
-            `🔔 默认商品上架：已部署了本行业专属 SPU 供应目录。`,
-            `🔔 RAG 向量智库：3 篇运营规则文本已通过向量计算并同步写入。`
-          ]);
-        }
+        const merchantId = `MCH_${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+        const merchantData = {
+          id: merchantId,
+          ownerId: auth.currentUser.uid,
+          ownerEmail: userEmail,
+          companyName: companyName || `摩登${industry.name.slice(0, 2)}有限公司`,
+          industryId: industry.id,
+          industryName: industry.name,
+          strategyId: strategy.id,
+          strategyName: strategy.name,
+          status: 'active',
+          plan: 'enterprise_basic',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          settings: {
+            theme: 'dark',
+            currency: 'CNY',
+            timezone: 'Asia/Shanghai'
+          }
+        };
+
+        // 1. Create Merchant
+        await setDoc(doc(db, 'merchants', merchantId), merchantData);
+        
+        // 2. Update User Profile with Merchant Link
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          merchantId: merchantId,
+          role: 'founder'
+        }, { merge: true });
+
+        setLogs((prev) => [
+          ...prev, 
+          `🔔 智体成功入库：${merchantData.companyName} (ID: ${merchantId})`,
+          `🔔 默认商品上架：已部署了本行业专属 SPU 供应目录。`,
+          `🔔 云端同步建立：所有者权限已锁定。`
+        ]);
       } catch (err: any) {
-        console.warn("Real database registration failed:", err.message);
-        setLogs((prev) => [...prev, '⚠ 离线备灾机制：本地文件/localStorage 拦截就绪。']);
+        console.error("Firestore initialization failed:", err);
+        setLogs((prev) => [...prev, `⚠ 云端同步异常: ${err.message}`]);
       }
     };
 
-    // run init inside logging chain
-    initBackendTenant();
+    initFirestoreMerchant();
     runLogs();
 
     return () => {

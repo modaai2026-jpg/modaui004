@@ -8,7 +8,9 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "node dist/server.cjs"
+    "server": "NODE_ENV=production node dist/server.cjs",
+    "audit:realtime": "node scripts/realtime_connectivity_audit.cjs",
+    "audit:config-governance": "node scripts/config_governance_audit.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -16,11 +18,13 @@
     "@paypal/checkout-server-sdk": "^1.0.3",
     "@reduxjs/toolkit": "^2.2.3",
     "axios": "^1.6.8",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase": "^10.11.0",
+    "firebase-admin": "^13.10.0",
     "framer-motion": "^11.1.7",
     "lucide-react": "^0.454.0",
     "motion": "^11.11.13",
@@ -34,14 +38,17 @@
     "stripe": "^15.5.0",
     "tailwind-merge": "^2.3.0",
     "tailwindcss": "^3.4.3",
-    "wechat-pay": "^0.3.2"
+    "wechat-pay": "^0.3.2",
+    "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^20.12.7",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.60.1",
     "@typescript-eslint/parser": "^8.60.1",
     "@vitejs/plugin-react": "^4.2.1",

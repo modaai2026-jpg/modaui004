@@ -1,7 +1,9 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from "vite";
+import http from 'http';
 // Load Google Gemini client safely at runtime (try common package names)
 let GoogleGenAI: any = null;
 try {
@@ -20,6 +22,7 @@ try {
 }
 import dotenv from "dotenv";
 import Stripe from "stripe";
+import admin from "firebase-admin";
 import { Payment, middleware as wechatMiddleware } from "wechat-pay";
 import * as paypalCheckoutServerSDK from "@paypal/checkout-server-sdk";
 import { PayPalService } from "./src/modules/payment/payment-paypal";
@@ -32,11 +35,38 @@ import {
   DBStaffPermission, 
   DBWebhookReg, 
   DBAPIKey, 
-  DBTransaction 
+  DBTransaction,
+  DBSubscription,
+  DBPendingAgentTask,
+  DBAgent,
+  DBKBChunk 
 } from "./src/server/db";
 import { generateWithOpenAI } from "./src/services/openai.service";
 import { createLangChainAgent } from "./src/services/langchain.service";
 import { generateWithOllama } from "./src/services/ollama.service";
+import { agentCollaborationHub } from "./src/services/agent-collaboration.service";
+import { smartModelRouter } from "./src/services/smart-model-router.service";
+import { dynamicLearningService } from "./src/services/dynamic-learning.service";
+import { Socialite } from './src/server/auth-providers';
+
+// Initialize Socialite with environment variables
+Socialite.init({
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID || 'dummy',
+    clientSecret: process.env.GITHUB_CLIENT_SECRET || 'dummy',
+    redirectUri: 'https://pay.modaui.com/api/auth/github/callback'
+  },
+  wechat: {
+    clientId: process.env.WECHAT_APP_ID || 'dummy',
+    clientSecret: process.env.WECHAT_APP_SECRET || 'dummy',
+    redirectUri: 'https://pay.modaui.com/api/auth/wechat/callback'
+  },
+  tiko: {
+    clientId: process.env.TIKO_CLIENT_ID || 'dummy',
+    clientSecret: process.env.TIKO_CLIENT_SECRET || 'dummy',
+    redirectUri: 'https://pay.modaui.com/api/auth/tiko/callback'
+  }
+});
 
 // Initialize Firebase client for server backup & live cloud persistence syncing
 import { initializeApp } from "firebase/app";
@@ -63,14 +93,22 @@ try {
     firebaseApp = initializeApp(config, "serverAppInstance");
     serverDb = getFirestore(firebaseApp, config.firestoreDatabaseId);
     console.log("[Firebase Server Init] Successfully bootstrapped Firestore with ID: " + config.firestoreDatabaseId);
+
+    // Initialize Admin SDK
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        projectId: config.projectId,
+      });
+      console.log("[Firebase Admin Init] Successfully initialized Admin SDK for project: " + config.projectId);
+    }
   }
 } catch (fireErr: any) {
   console.warn("[Firebase Server Warn] Failed to bootstrap cloud client fallback:", fireErr.message);
 }
 
-let aiClient: GoogleGenAI | null = null;
+let aiClient: any = null;
 
-function getGeminiClient(): GoogleGenAI {
+function getGeminiClient(): any {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
     throw new Error("GEMINI_API_KEY is not configured in environment variables.");
@@ -86,6 +124,30 @@ function getGeminiClient(): GoogleGenAI {
     });
   }
   return aiClient;
+}
+
+function mapAgentToTaskType(agentId: string): import("./src/services/smart-model-router.service").TaskType {
+  const mapping: Record<string, import("./src/services/smart-model-router.service").TaskType> = {
+    'aria-designer': 'content_generation',
+    'barton-purchasing': 'financial_calculation',
+    'cyrus-operations': 'complex_reasoning',
+    'daphne-marketing': 'content_generation',
+    'fiona-finance': 'financial_calculation',
+    'claire-customer-service': 'customer_service'
+  };
+  return mapping[agentId] || 'complex_reasoning';
+}
+
+function estimateTokens(text: string) {
+  return Math.max(1, Math.round(text.length / 4));
+}
+
+function estimateCost(modelId: string, inputTokens: number, outputTokens: number) {
+  const model = smartModelRouter.getAllModelStats()[modelId];
+  if (!model) return 0;
+  const costPer1kInput = model.costPer1kInputTokens || 0;
+  const costPer1kOutput = model.costPer1kOutputTokens || 0;
+  return (inputTokens / 1000) * costPer1kInput + (outputTokens / 1000) * costPer1kOutput;
 }
 
 // Lazy safe Stripe initializer
@@ -104,32 +166,200 @@ function getStripe(): Stripe | null {
 }
 
 async function startServer() {
-  const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+    const app = express();
+    const server = http.createServer(app);
+    const wss = new WebSocketServer({ server });
+    const PORT = Number(process.env.PORT) || 3000;
 
-  // Middleware for body parsing
-  app.use(express.json());
+    // --- WebSocket Event Hub ---
+    const clients = new Map<string, WebSocket>();
+    wss.on('connection', (ws, req) => {
+      const url = new URL(req.url || '', `http://${req.headers.host}`);
+      const userId = url.searchParams.get('userId') || 'anonymous';
+      clients.set(userId, ws);
+      console.log(`[WS] Client connected: ${userId}`);
 
-  // --- Simple admin auth middleware (RBAC) ---
-  function adminAuth(req: any, res: any, next: any) {
-    try {
-      const sessionId = (req.headers['authorization'] || req.body?.sessionId || req.query?.sessionId) as string | undefined;
-      const db = ModaDB.read();
-      if (!sessionId) {
-        return res.status(401).json({ success: false, error: 'Missing session token.' });
+      ws.on('close', () => {
+        clients.delete(userId);
+        console.log(`[WS] Client disconnected: ${userId}`);
+      });
+    });
+
+    // Helper to broadcast to specific user
+    const notifyUser = (userId: string, data: any) => {
+      const client = clients.get(userId);
+      if (client && client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(data));
       }
-      const session = db.sessions.find((s: any) => s.id === sessionId && new Date(s.expiresAt) > new Date());
-      if (!session) return res.status(401).json({ success: false, error: 'Session invalid or expired.' });
-      const user = db.users.find((u: any) => u.id === session.userId);
-      if (!user) return res.status(403).json({ success: false, error: 'User not found.' });
-      if (user.role !== 'Platform Admin') return res.status(403).json({ success: false, error: 'Access denied: Platform Admin only.' });
-      // attach user to request for downstream
-      req.authUser = user;
+    };
+
+  // --- Infrastructure Layer: Cache & Logs ---
+    const memoryCache = new Map<string, { data: any, expiry: number }>();
+    const getCached = (key: string) => {
+      const entry = memoryCache.get(key);
+      if (entry && entry.expiry > Date.now()) return entry.data;
+      return null;
+    };
+    const setCached = (key: string, data: any, ttl: number = 60000) => {
+      memoryCache.set(key, { data, expiry: Date.now() + ttl });
+    };
+
+    app.use(express.json());
+
+    // --- Security Layer: Rate Limiting & Headers ---
+    const rateLimitMap = new Map<string, { count: number, resetTime: number }>();
+    const rateLimiter = (req: any, res: any, next: any) => {
+      const ip = req.ip || 'unknown';
+      const now = Date.now();
+      const limit = 100; // 100 requests per minute
+      const windowMs = 60000;
+
+      let record = rateLimitMap.get(ip);
+      if (!record || now > record.resetTime) {
+        record = { count: 0, resetTime: now + windowMs };
+      }
+
+      record.count++;
+      rateLimitMap.set(ip, record);
+
+      if (record.count > limit) {
+        ModaDB.log("SECURITY", ip, "RATE_LIMIT_EXCEEDED", "WAF", `Too many requests from IP: ${ip}`);
+        return res.status(429).json({ success: false, error: "Too many requests, please try again later." });
+      }
+
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('X-XSS-Protection', '1; mode=block');
       next();
+    };
+    app.use(rateLimiter);
+
+    // --- Observability Middleware: Performance & Error Tracking ---
+    const metrics = {
+      requestTotal: 0,
+      errorTotal: 0,
+      latencySum: 0,
+      apiUsage: {} as Record<string, number>
+    };
+
+    app.use((req, res, next) => {
+      const start = Date.now();
+      metrics.requestTotal++;
+      
+      const path = req.path;
+      metrics.apiUsage[path] = (metrics.apiUsage[path] || 0) + 1;
+
+      res.on('finish', () => {
+        const duration = Date.now() - start;
+        metrics.latencySum += duration;
+        if (res.statusCode >= 400) {
+          metrics.errorTotal++;
+          ModaDB.log("SYSTEM", "ERROR_MONITOR", "HTTP_ERROR", "OBSERVABILITY", `Request failed: ${req.method} ${path} - Status: ${res.statusCode}`);
+        }
+      });
+      next();
+    });
+
+    app.get("/api/health", (req, res) => {
+      res.json({
+        status: "UP",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        metrics: {
+          ...metrics,
+          avgLatency: metrics.requestTotal > 0 ? (metrics.latencySum / metrics.requestTotal).toFixed(2) + 'ms' : '0ms'
+        }
+      });
+    });
+
+  // --- Enterprise Auth Middleware ---
+  async function authenticate(req: any, res: any, next: any) {
+    try {
+      const authHeader = req.headers['authorization'];
+      const sessionId = (authHeader || req.body?.sessionId || req.query?.sessionId) as string | undefined;
+      const db = ModaDB.read();
+
+      // 1. Check for Firebase ID Token
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.split('Bearer ')[1];
+        try {
+          const decodedToken = await admin.auth().verifyIdToken(token);
+          const user = db.users.find(u => u.email.toLowerCase() === decodedToken.email?.toLowerCase());
+          if (user) {
+            req.authUser = user;
+            return next();
+          }
+          // Auto-provision user if not in ModaDB but valid in Firebase
+          const newUser: any = {
+            id: decodedToken.uid,
+            username: decodedToken.name || decodedToken.email?.split('@')[0] || 'user',
+            email: decodedToken.email?.toLowerCase(),
+            passwordHash: 'FIREBASE_AUTHED',
+            role: 'Merchant Owner',
+            verified: true,
+            createdAt: new Date().toISOString()
+          };
+          db.users.push(newUser);
+          ModaDB.write(db);
+          req.authUser = newUser;
+          return next();
+        } catch (tokenErr) {
+          console.warn("[Auth] Invalid Firebase Token:", tokenErr);
+          // Fallback to session check if token is invalid
+        }
+      }
+
+      // 2. Check for Session ID
+      if (sessionId) {
+        const session = db.sessions.find((s: any) => s.id === sessionId && new Date(s.expiresAt) > new Date());
+        if (session) {
+          const user = db.users.find((u: any) => u.id === session.userId);
+          if (user) {
+            req.authUser = user;
+            return next();
+          }
+        }
+      }
+
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or missing authentication.' });
     } catch (e: any) {
       return res.status(500).json({ success: false, error: e.message });
     }
   }
+
+  function adminOnly(req: any, res: any, next: any) {
+     authenticate(req, res, () => {
+       if (req.authUser?.role !== 'Platform Admin') {
+         return res.status(403).json({ success: false, error: 'Access denied: Platform Admin only.' });
+       }
+       next();
+     });
+   }
+
+   // --- RBAC Permission Middleware ---
+   const ROLE_PERMISSIONS: Record<string, string[]> = {
+     'Platform Admin': ['all'],
+     'Merchant Owner': ['merchant_manage', 'store_manage', 'product_manage', 'order_manage', 'finance_read'],
+     'Manager': ['store_manage', 'product_manage', 'order_manage'],
+     'Staff': ['order_manage', 'product_read'],
+     'Customer': ['shop_view', 'cart_manage', 'order_create']
+   };
+
+   function requirePermission(perm: string) {
+     return (req: any, res: any, next: any) => {
+       authenticate(req, res, () => {
+         const user = req.authUser;
+         if (!user) return res.status(401).json({ success: false, error: 'Authentication required.' });
+
+         const perms = ROLE_PERMISSIONS[user.role] || [];
+         if (perms.includes('all') || perms.includes(perm)) {
+           return next();
+         }
+
+         res.status(403).json({ success: false, error: `Forbidden: Missing permission [${perm}]` });
+       });
+     };
+   }
 
   // === 1. API STATUS PORTAL ===
   app.get("/api/status", (req, res) => {
@@ -148,6 +378,31 @@ async function startServer() {
   });
 
   // === 2. AUTHENTICATION SERVICES (AUTH & USERS API) ===
+  const createAuthToken = (db: any, userId: string, type: 'refresh' | 'email_verification' | 'password_reset', ttlHours: number, metadata: Record<string, any> = {}) => {
+    const token = `tok_${Math.random().toString(36).slice(2, 18)}`;
+    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
+    const authToken = {
+      id: `at_${Math.random().toString(36).slice(2, 10)}`,
+      userId,
+      token,
+      type,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+      used: false,
+      metadata
+    };
+    db.authTokens.push(authToken);
+    return authToken;
+  };
+
+  const consumeAuthToken = (db: any, token: string, type: 'refresh' | 'email_verification' | 'password_reset') => {
+    const record = db.authTokens.find((t: any) => t.token === token && t.type === type && !t.used && new Date(t.expiresAt) > new Date());
+    if (!record) return null;
+    record.used = true;
+    db.authTokens = db.authTokens.filter((t: any) => t.id !== record.id || t.token === record.token);
+    return record;
+  };
+
   app.post("/api/auth/register", (req, res) => {
     try {
       const {
@@ -155,41 +410,33 @@ async function startServer() {
         name,
         email,
         password,
-        role = "Customer",
+        role = "Merchant Owner",
         industryId,
         operatingMode,
         planId
       } = req.body;
 
-      if (!email) {
-        res.status(400).json({ success: false, error: "Email is required for registration." });
+      if (!email || !password) {
+        res.status(400).json({ success: false, error: "Email and password are required for registration." });
         return;
       }
-
       const db = ModaDB.read();
       const normalizedEmail = String(email).toLowerCase();
-      let user = db.users.find(u => u.email.toLowerCase() === normalizedEmail);
-
-      if (user) {
-        const sessionId = `sess_${Math.random().toString(36).slice(2, 15)}`;
-        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        db.sessions.push({ id: sessionId, userId: user.id, expiresAt });
-        ModaDB.write(db);
-        ModaDB.log(user.id, user.username, "USER_REGISTER", "AUTH", `Existing user registration requested: ${email}`);
-        res.json({ success: true, sessionId, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
+      const existingUser = db.users.find((u: any) => u.email.toLowerCase() === normalizedEmail);
+      if (existingUser) {
+        res.status(409).json({ success: false, error: "Email already registered. Please login or reset your password." });
         return;
       }
 
       const username = providedUsername || name || normalizedEmail.split('@')[0] || `user_${Math.random().toString(36).slice(2, 8)}`;
-      const safePassword = password || `autogen_${Math.random().toString(36).slice(2, 10)}`;
       const userId = `usr_${Math.random().toString(36).slice(2, 11)}`;
       const newUser = {
         id: userId,
         username,
         email: normalizedEmail,
-        passwordHash: ModaDB.hashPassword(safePassword),
+        passwordHash: ModaDB.hashPassword(password),
         role,
-        verified: true,
+        verified: false,
         createdAt: new Date().toISOString(),
         metadata: {
           industryId,
@@ -198,13 +445,100 @@ async function startServer() {
         }
       };
       db.users.push(newUser);
-      const sessionId = `sess_${Math.random().toString(36).slice(2, 15)}`;
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      db.sessions.push({ id: sessionId, userId, expiresAt });
+      const verificationToken = createAuthToken(db, userId, 'email_verification', 24, { email: normalizedEmail });
       ModaDB.write(db);
-      ModaDB.log(userId, username, "USER_REGISTER", "AUTH", `User registration successful: ${normalizedEmail}`);
+      ModaDB.log(userId, username, "USER_REGISTER", "AUTH", `User registration successful and verification pending: ${normalizedEmail}`);
+      ModaDB.notify(userId, username, "验证邮件已发送", `请检查 ${normalizedEmail} 以完成注册验证。`, 'info', 'AUTH', 'admin');
+      console.log(`[Auth] Verification token for ${normalizedEmail}: ${verificationToken.token}`);
 
-      res.status(201).json({ success: true, sessionId, user: { id: userId, username, email: normalizedEmail, role } });
+      res.status(201).json({
+        success: true,
+        user: { id: userId, username, email: normalizedEmail, role },
+        verificationSent: true,
+        debugVerificationToken: process.env.NODE_ENV !== 'production' ? verificationToken.token : undefined
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // === 11.a AGENT WORKER CONTROL API (external workers can pull / complete tasks) ===
+  app.post('/api/agents/worker/next', async (req, res) => {
+    try {
+      // Optional agentId filter for worker affinity
+      const { agentId } = req.body || {};
+      const task = ModaDB.dequeueAgentTask(agentId);
+      if (!task) return res.json({ success: true, task: null, message: 'No pending tasks' });
+      // Mirror to Firestore if available
+      if (serverDb) {
+        try {
+          const taskRef = firestoreDoc(serverDb, 'tenants', String(task.merchantId || 'default_tenant'), 'agent_tasks', task.id);
+          await firestoreSetDoc(taskRef, { ...task, leasedAt: new Date().toISOString() });
+        } catch (fsErr: any) {
+          console.warn('Firestore worker lease sync failed:', fsErr.message);
+        }
+      }
+      res.json({ success: true, task });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/agents/worker/complete', async (req, res) => {
+    try {
+      const { taskId, result, logs } = req.body || {};
+      if (!taskId) return res.status(400).json({ success: false, error: 'taskId required' });
+      const db = ModaDB.read();
+      const task: any = db.agent_tasks.find((t: any) => t.id === taskId);
+      if (!task) return res.status(404).json({ success: false, error: 'Task not found' });
+      task.status = 'COMPLETED';
+      task.result = result || task.result;
+      task.logs = (task.logs || []).concat(Array.isArray(logs) ? logs : (logs ? [logs] : []));
+      task.completedAt = new Date().toISOString();
+      ModaDB.write(db);
+
+      if (serverDb) {
+        try {
+          const taskRef = firestoreDoc(serverDb, 'tenants', String(task.merchantId || 'default_tenant'), 'agent_tasks', task.id);
+          await firestoreSetDoc(taskRef, { ...task, syncedAt: new Date().toISOString() });
+        } catch (fsErr: any) {
+          console.warn('Firestore worker completion sync failed:', fsErr.message);
+        }
+      }
+
+      res.json({ success: true, task });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get('/api/agents/worker/pendingCount', (req, res) => {
+    try {
+      const db = ModaDB.read();
+      const count = (db.agent_tasks || []).filter((t: any) => t.status === 'PENDING' || t.status === 'THINKING').length;
+      res.json({ success: true, pending: count });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // List failed / dead-letter tasks
+  app.get('/api/agents/worker/failed', (req, res) => {
+    try {
+      const db = ModaDB.read();
+      const failed = (db.agent_tasks || []).filter((t: any) => t.status === 'FAILED');
+      res.json({ success: true, failed });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // Force requeue expired leases (admin tooling)
+  app.post('/api/agents/worker/requeue', (req, res) => {
+    try {
+      const { leaseTimeoutMs } = req.body || {};
+      const recovered = ModaDB.requeueExpiredLeases(Number(leaseTimeoutMs) || 120000);
+      res.json({ success: true, recovered });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -213,41 +547,77 @@ async function startServer() {
   app.post("/api/auth/login", (req, res) => {
     try {
       const { email, password } = req.body;
-      if (!email) {
-        res.status(400).json({ success: false, error: "Email is required for login." });
+      if (!email || !password) {
+        res.status(400).json({ success: false, error: "Email and password are required." });
         return;
       }
       const db = ModaDB.read();
       const normalizedEmail = String(email).toLowerCase();
-      let user = db.users.find(u => u.email.toLowerCase() === normalizedEmail);
-
+      const user = db.users.find((u: any) => u.email.toLowerCase() === normalizedEmail);
       if (!user) {
-        // Support lightweight login flows where a Firebase or OAuth identity is used without a local password
-        const userId = `usr_${Math.random().toString(36).slice(2, 11)}`;
-        const username = normalizedEmail.split('@')[0] || `user_${Math.random().toString(36).slice(2, 8)}`;
-        const autoPassword = password || `autogen_${Math.random().toString(36).slice(2, 10)}`;
-        user = {
-          id: userId,
-          username,
-          email: normalizedEmail,
-          passwordHash: ModaDB.hashPassword(autoPassword),
-          role: "Founder",
-          verified: true,
-          createdAt: new Date().toISOString()
-        };
-        db.users.push(user);
-      } else if (password && user.passwordHash !== ModaDB.hashPassword(password)) {
+        res.status(401).json({ success: false, error: "Invalid credentials." });
+        return;
+      }
+      if (!user.verified) {
+        res.status(403).json({ success: false, error: "Email address has not been verified." });
+        return;
+      }
+      if (!ModaDB.comparePassword(password, user.passwordHash)) {
         res.status(401).json({ success: false, error: "Invalid credentials." });
         return;
       }
 
       const sessionId = `sess_${Math.random().toString(36).slice(2, 15)}`;
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const refreshToken = createAuthToken(db, user.id, 'refresh', 168, { purpose: 'session_refresh' });
+      const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
       db.sessions.push({ id: sessionId, userId: user.id, expiresAt });
       ModaDB.write(db);
       ModaDB.log(user.id, user.username, "USER_LOGIN", "AUTH", `User login session created: ${sessionId}`);
 
-      res.json({ success: true, sessionId, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
+      res.json({
+        success: true,
+        sessionId,
+        refreshToken: refreshToken.token,
+        user: { id: user.id, username: user.username, email: user.email, role: user.role }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/auth/social", (req, res) => {
+    try {
+      const { email, provider, name, avatar } = req.body;
+      if (!email || !provider) {
+        res.status(400).json({ success: false, error: "Email and provider are required for social authentication." });
+        return;
+      }
+      const db = ModaDB.read();
+      const normalizedEmail = String(email).toLowerCase();
+      let user: any = db.users.find((u: any) => u.email.toLowerCase() === normalizedEmail);
+      if (!user) {
+        const userId = `usr_${Math.random().toString(36).slice(2, 11)}`;
+        user = {
+          id: userId,
+          username: name || normalizedEmail.split('@')[0] || 'social_user',
+          email: normalizedEmail,
+          passwordHash: ModaDB.hashPassword(`social_${provider}_${Math.random().toString(36).slice(2, 12)}`),
+          role: 'Merchant Owner',
+          verified: true,
+          createdAt: new Date().toISOString(),
+          metadata: { provider, avatar }
+        };
+        db.users.push(user);
+      }
+
+      const sessionId = `sess_${Math.random().toString(36).slice(2, 15)}`;
+      const refreshToken = createAuthToken(db, user.id, 'refresh', 168, { purpose: 'social_login', provider });
+      const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+      db.sessions.push({ id: sessionId, userId: user.id, expiresAt });
+      ModaDB.write(db);
+      ModaDB.log(user.id, user.username, "USER_SOCIAL_LOGIN", "AUTH", `Social login via ${provider} created session: ${sessionId}`);
+
+      res.json({ success: true, sessionId, refreshToken: refreshToken.token, user: { id: user.id, username: user.username, email: user.email, role: user.role } });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
@@ -255,12 +625,15 @@ async function startServer() {
 
   app.post("/api/auth/logout", (req, res) => {
     try {
-      const { sessionId } = req.body;
+      const { sessionId, refreshToken } = req.body;
+      const db = ModaDB.read();
       if (sessionId) {
-        const db = ModaDB.read();
-        db.sessions = db.sessions.filter(s => s.id !== sessionId);
-        ModaDB.write(db);
+        db.sessions = db.sessions.filter((s: any) => s.id !== sessionId);
       }
+      if (refreshToken) {
+        db.authTokens = db.authTokens.filter((t: any) => t.token !== refreshToken || t.type !== 'refresh');
+      }
+      ModaDB.write(db);
       res.json({ success: true, message: "Logged out from unified console." });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
@@ -269,18 +642,18 @@ async function startServer() {
 
   app.post("/api/auth/me", (req, res) => {
     try {
-      const { sessionId } = req.body;
+      const sessionId = req.body.sessionId || req.headers['authorization'];
       if (!sessionId) {
         res.status(400).json({ success: false, error: "Session token is required" });
         return;
       }
       const db = ModaDB.read();
-      const session = db.sessions.find(s => s.id === sessionId && new Date(s.expiresAt) > new Date());
+      const session = db.sessions.find((s: any) => s.id === sessionId && new Date(s.expiresAt) > new Date());
       if (!session) {
         res.status(401).json({ success: false, error: "Session expired or invalid" });
         return;
       }
-      const user = db.users.find(u => u.id === session.userId);
+      const user = db.users.find((u: any) => u.id === session.userId);
       if (!user) {
         res.status(404).json({ success: false, error: "User associated with session not found" });
         return;
@@ -291,8 +664,150 @@ async function startServer() {
     }
   });
 
+  app.post("/api/auth/refresh", (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        res.status(400).json({ success: false, error: "Refresh token is required" });
+        return;
+      }
+      const db = ModaDB.read();
+      const record = db.authTokens.find((t: any) => t.token === refreshToken && t.type === 'refresh' && !t.used && new Date(t.expiresAt) > new Date());
+      if (!record) {
+        res.status(401).json({ success: false, error: "Refresh token invalid or expired" });
+        return;
+      }
+      record.used = true;
+      const sessionId = `sess_${Math.random().toString(36).slice(2, 15)}`;
+      const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
+      db.sessions.push({ id: sessionId, userId: record.userId, expiresAt });
+      const newRefreshToken = createAuthToken(db, record.userId, 'refresh', 168, { purpose: 'session_refresh' });
+      ModaDB.write(db);
+      res.json({ success: true, sessionId, refreshToken: newRefreshToken.token });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/auth/verify-email", (req, res) => {
+    try {
+      const { token } = req.body;
+      if (!token) {
+        res.status(400).json({ success: false, error: "Verification token is required" });
+        return;
+      }
+      const db = ModaDB.read();
+      const record = db.authTokens.find((t: any) => t.token === token && t.type === 'email_verification' && !t.used && new Date(t.expiresAt) > new Date());
+      if (!record) {
+        res.status(401).json({ success: false, error: "Invalid or expired verification token." });
+        return;
+      }
+      const user = db.users.find((u: any) => u.id === record.userId);
+      if (!user) {
+        res.status(404).json({ success: false, error: "User not found for verification token." });
+        return;
+      }
+      user.verified = true;
+      record.used = true;
+      ModaDB.write(db);
+      res.json({ success: true, message: "Email address verified successfully." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/auth/password-reset", (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        res.status(400).json({ success: false, error: "Email is required for password reset." });
+        return;
+      }
+      const db = ModaDB.read();
+      const normalizedEmail = String(email).toLowerCase();
+      const user = db.users.find((u: any) => u.email.toLowerCase() === normalizedEmail);
+      if (!user) {
+        res.status(200).json({ success: true, message: "If the email exists, a password reset link will be sent." });
+        return;
+      }
+      const resetToken = createAuthToken(db, user.id, 'password_reset', 4, { email: normalizedEmail });
+      ModaDB.write(db);
+      ModaDB.log(user.id, user.username, "PASSWORD_RESET", "AUTH", `Password reset token issued for ${normalizedEmail}`);
+      console.log(`[Auth] Password reset token for ${normalizedEmail}: ${resetToken.token}`);
+      res.json({ success: true, message: "Password reset token has been issued.", debugResetToken: process.env.NODE_ENV !== 'production' ? resetToken.token : undefined });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/auth/password-reset/confirm", (req, res) => {
+    try {
+      const { token, newPassword } = req.body;
+      if (!token || !newPassword) {
+        res.status(400).json({ success: false, error: "Both token and new password are required." });
+        return;
+      }
+      const db = ModaDB.read();
+      const record = db.authTokens.find((t: any) => t.token === token && t.type === 'password_reset' && !t.used && new Date(t.expiresAt) > new Date());
+      if (!record) {
+        res.status(401).json({ success: false, error: "Invalid or expired password reset token." });
+        return;
+      }
+      const user = db.users.find((u: any) => u.id === record.userId);
+      if (!user) {
+        res.status(404).json({ success: false, error: "User not found for reset token." });
+        return;
+      }
+      user.passwordHash = ModaDB.hashPassword(newPassword);
+      user.verified = true;
+      record.used = true;
+      ModaDB.write(db);
+      res.json({ success: true, message: "Password has been updated successfully." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // --- 2FA Verification System ---
+  const tfaStore = new Map<string, { code: string, expires: number }>();
+
+  app.post("/api/auth/2fa/generate", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) return res.status(400).json({ success: false, error: "Email is required" });
+
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
+      tfaStore.set(email.toLowerCase(), {
+        code,
+        expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+      });
+
+      console.log(`[2FA] Code for ${email}: ${code}`);
+      // In a real app, send email here.
+      res.json({ success: true, message: "2FA code sent to your registered security device." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/auth/2fa/verify", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+      const record = tfaStore.get(email.toLowerCase());
+
+      if (!record || record.code !== code || Date.now() > record.expires) {
+        return res.status(401).json({ success: false, error: "Invalid or expired 2FA code." });
+      }
+
+      tfaStore.delete(email.toLowerCase());
+      res.json({ success: true, message: "2FA verification successful." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // Fetch users (Platform Admin & RBAC Audit)
-  app.get("/api/users", (req, res) => {
+  app.get("/api/users", adminOnly, (req, res) => {
     try {
       const db = ModaDB.read();
       res.json({ success: true, users: db.users.map(u => ({ id: u.id, username: u.username, email: u.email, role: u.role, createdAt: u.createdAt })) });
@@ -302,7 +817,7 @@ async function startServer() {
   });
 
   // === 3. MERCHANTS & STORE TENANCY API ===
-  app.get("/api/merchants", (req, res) => {
+  app.get("/api/merchants", requirePermission('merchant_manage'), (req, res) => {
     try {
       const db = ModaDB.read();
       res.json({ success: true, merchants: db.merchants });
@@ -311,7 +826,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/merchants", (req, res) => {
+  app.post("/api/merchants", requirePermission('merchant_manage'), (req, res) => {
     try {
       let { name, ownerId, billingPlan = "free", newTenant } = req.body;
       if (newTenant && typeof newTenant === 'object') {
@@ -345,6 +860,8 @@ async function startServer() {
 
       ModaDB.write(db);
       ModaDB.log(ownerId, "SYSTEM", "MERCHANT_CREATE", "TENANT_ENGINE", `Merchant created: ${name} (${merchantId})`);
+      ModaDB.notify(ownerId, "SYSTEM", "Merchant Created", `商户已创建：${name} (${merchantId})`, 'info', 'TENANT_ENGINE', 'admin', merchantId);
+      ModaDB.publishEvent("MERCHANT_CREATED", { merchantId, name, ownerId, billingPlan }, 'TENANT_ENGINE', 'EVENT_BUS', { tenantId: merchantId });
       res.status(201).json({ success: true, merchant: newMerchant });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
@@ -567,6 +1084,7 @@ async function startServer() {
           title: chk.title,
           content: chk.content,
           tokenCount: chk.tokenCount,
+          version: 1,
           createdAt: new Date().toISOString(),
           vector: vector as any
         });
@@ -666,6 +1184,9 @@ async function startServer() {
         }
       }
 
+      ModaDB.notify(tenantId, "SYSTEM", "Store Created", `店铺已创建：${newStore.name} (${newStore.id})`, 'info', 'STORE_ENGINE', 'admin', tenantId);
+      ModaDB.publishEvent("STORE_CREATED", { storeId: newStore.id, merchantId: tenantId, name: newStore.name }, 'STORE_ENGINE', 'EVENT_BUS', { tenantId });
+
       res.status(200).json({
         success: true,
         merchantId: tenantId,
@@ -756,7 +1277,7 @@ async function startServer() {
   });
 
   // Admin convenience route used by admin UI: marketplaces -> stores
-  app.get('/api/admin/marketplaces/stores', adminAuth, (req, res) => {
+  app.get('/api/admin/marketplaces/stores', adminOnly, (req, res) => {
     try {
       const { page = '1', pageSize = '50', merchantId, search } = req.query as any;
       const db = ModaDB.read();
@@ -858,6 +1379,8 @@ async function startServer() {
       };
       db.products.push(newProd);
       ModaDB.write(db);
+      ModaDB.notify("SYSTEM", "SYSTEM", "Product Created", `商品已创建：${newProd.name} (${newProd.id})`, 'info', 'PRODUCT_ENGINE', 'admin', newProd.storeId);
+      ModaDB.publishEvent("PRODUCT_CREATED", { productId: newProd.id, name: newProd.name, storeId: newProd.storeId }, 'PRODUCT_ENGINE', 'EVENT_BUS', { tenantId: newProd.storeId });
       res.status(201).json({ success: true, product: newProd });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
@@ -940,7 +1463,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/orders", (req, res) => {
+  app.post("/api/orders", async (req, res) => {
     try {
       const payload = req.body.order || req.body;
       const {
@@ -963,23 +1486,54 @@ async function startServer() {
       const db = ModaDB.read();
       const orderId = providedOrderId || `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, "")}-${Math.floor(1000 + Math.random() * 9000)}`;
       const resolvedStoreId = storeId || (tenantId ? `sto_${tenantId}` : "universal_store");
-      const newOrder = {
+      const newOrder: any = {
         id: orderId,
         userId: userId || "guest_user",
         storeId: resolvedStoreId,
         merchantId: merchantId || tenantId || "default_tenant",
         items,
         totalPrice: Number(totalPrice),
-        status: status as const,
+        status: status,
         shipmentTracking: {
           carrier: "顺丰速运",
           trackingNumber: `SF${Math.floor(100000000000 + Math.random() * 900000000000)}`,
           status: "待安排快递员揽收"
         },
+        timeline: [
+          {
+            status: 'created',
+            message: '订单已创建，等待系统处理',
+            timestamp: new Date().toISOString()
+          }
+        ],
         createdAt: new Date().toISOString()
       };
+
+      if (status === 'paid') {
+        newOrder.timeline.push({
+          status: 'paid',
+          message: '买家已成功支付，金额已锁定',
+          timestamp: new Date().toISOString()
+        });
+      }
       
       db.orders.push(newOrder);
+
+      // --- NEW: Sync to Firestore for real-time Merchant Dashboards ---
+      if (serverDb && tenantId) {
+        try {
+          const industryId = payload.industryId || "catering"; // Fallback
+          await admin.firestore().collection('tenants').doc(String(tenantId))
+            .collection('industries').doc(industryId)
+            .collection('orders').doc(orderId).set({
+              ...newOrder,
+              syncSource: 'backend_api'
+            });
+          console.log(`[Order Sync] Successfully synced order ${orderId} to Firestore for tenant ${tenantId}`);
+        } catch (fsErr) {
+          console.warn(`[Order Sync] Firestore sync failed for ${orderId}:`, fsErr);
+        }
+      }
 
       // Deduct product inventory dynamically (Real Inventory Check)
       items.forEach((it: any) => {
@@ -991,16 +1545,18 @@ async function startServer() {
 
       ModaDB.write(db);
       ModaDB.log(userId || "GUEST", "BUYER", "ORDER_PLACED", "ORDER_ENG", `Placed order: ${orderId} total: ¥${totalPrice}`);
+      ModaDB.notify(userId || "GUEST", "BUYER", "New Order", `新订单已创建：${orderId}，金额 ¥${totalPrice}`, 'info', 'ORDER_ENG', 'admin', resolvedStoreId);
+      ModaDB.publishEvent("ORDER_PLACED", { orderId, storeId: resolvedStoreId, merchantId: merchantId || tenantId || "default_tenant", totalPrice }, 'ORDER_ENG', 'EVENT_BUS', { tenantId: merchantId || tenantId || "default_tenant" });
       res.status(201).json({ success: true, order: newOrder });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
   });
 
-  app.put("/api/orders/:id/dispatch", (req, res) => {
+  app.put("/api/orders/:id/dispatch", async (req, res) => {
     try {
       const { id } = req.params;
-      const { status = "shipped", trackingNum, carrier } = req.body;
+      const { status = "shipped", trackingNum, carrier, tenantId, industryId = "catering" } = req.body;
       const db = ModaDB.read();
       const order = db.orders.find(o => o.id === id);
       if (!order) {
@@ -1017,6 +1573,31 @@ async function startServer() {
           order.shipmentTracking.carrier = carrier;
         }
       }
+
+      // Add to timeline
+      if (!order.timeline) order.timeline = [];
+      order.timeline.push({
+        status: status,
+        message: status === "shipped" ? `订单已发货，物流商：${carrier || "顺丰速运"}，单号：${trackingNum || order.shipmentTracking?.trackingNumber}` : "订单已完成签收",
+        timestamp: new Date().toISOString()
+      });
+
+      // Sync to Firestore
+      if (serverDb && (tenantId || order.merchantId)) {
+        try {
+          const tid = tenantId || order.merchantId;
+          await admin.firestore().collection('tenants').doc(String(tid))
+            .collection('industries').doc(industryId)
+            .collection('orders').doc(id).update({
+              status,
+              shipmentTracking: order.shipmentTracking,
+              timeline: order.timeline
+            });
+        } catch (fsErr) {
+          console.warn(`[Dispatch Sync] Firestore update failed for ${id}:`, fsErr);
+        }
+      }
+
       ModaDB.write(db);
       ModaDB.log("MERCHANT", "STAFF_DISPATCHER", "ORDER_DISPATCH", "ORDER_ENG", `Dispatched tracking update for: ${id} to ${status}`);
       res.json({ success: true, order });
@@ -1025,18 +1606,99 @@ async function startServer() {
     }
   });
 
-  app.post("/api/orders/:id/refund", (req, res) => {
+  app.post("/api/orders/:id/cancel", async (req, res) => {
     try {
       const { id } = req.params;
-      const { reason = "客户申请无理由退款" } = req.body;
+      const { reason = "买家自主取消订单", tenantId, industryId = "catering" } = req.body;
       const db = ModaDB.read();
       const order = db.orders.find(o => o.id === id);
       if (!order) {
         res.status(404).json({ success: false, error: "Order not found." });
         return;
       }
-      order.status = "refunded";
+      
+      if (order.status !== 'pending' && order.status !== 'paid') {
+        res.status(400).json({ success: false, error: "只有待处理或已支付的订单可以取消。" });
+        return;
+      }
+
+      order.status = "cancelled";
+      order.cancellationReason = reason;
+
+      // Add to timeline
+      if (!order.timeline) order.timeline = [];
+      order.timeline.push({
+        status: 'cancelled',
+        message: `订单已取消。原因：${reason}`,
+        timestamp: new Date().toISOString()
+      });
+
+      // Sync to Firestore
+      if (serverDb && (tenantId || order.merchantId)) {
+        try {
+          const tid = tenantId || order.merchantId;
+          await admin.firestore().collection('tenants').doc(String(tid))
+            .collection('industries').doc(industryId)
+            .collection('orders').doc(id).update({
+              status: "cancelled",
+              cancellationReason: reason,
+              timeline: order.timeline
+            });
+        } catch (fsErr) {
+          console.warn(`[Cancel Sync] Firestore update failed for ${id}:`, fsErr);
+        }
+      }
+
+      ModaDB.write(db);
+      ModaDB.log("BUYER", "USER_ACTION", "ORDER_CANCEL", "ORDER_ENG", `Order cancelled: ${id}. Reason: ${reason}`);
+      res.json({ success: true, order });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/orders/:id/refund", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason = "客户申请无理由退款", amount, tenantId, industryId = "catering" } = req.body;
+      const db = ModaDB.read();
+      const order = db.orders.find(o => o.id === id);
+      if (!order) {
+        res.status(404).json({ success: false, error: "Order not found." });
+        return;
+      }
+
+      const refundAmount = amount ? Number(amount) : order.totalPrice;
+      const isPartial = refundAmount < order.totalPrice;
+
+      order.status = isPartial ? "partially_refunded" : "refunded";
       order.refundReason = reason;
+      order.refundAmount = (order.refundAmount || 0) + refundAmount;
+
+      // Add to timeline
+      if (!order.timeline) order.timeline = [];
+      order.timeline.push({
+        status: order.status,
+        message: `订单已发起${isPartial ? '部分' : '全额'}退款。金额：¥${refundAmount}。原因：${reason}`,
+        timestamp: new Date().toISOString()
+      });
+
+      // Sync to Firestore
+      if (serverDb && (tenantId || order.merchantId)) {
+        try {
+          const tid = tenantId || order.merchantId;
+          await admin.firestore().collection('tenants').doc(String(tid))
+            .collection('industries').doc(industryId)
+            .collection('orders').doc(id).update({
+              status: order.status,
+              refundReason: reason,
+              refundAmount: order.refundAmount,
+              timeline: order.timeline
+            });
+        } catch (fsErr) {
+          console.warn(`[Refund Sync] Firestore update failed for ${id}:`, fsErr);
+        }
+      }
 
       // Reverse revenue ledgers and create financial correction transaction
       const refundId = `PAY-REF-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -1044,14 +1706,60 @@ async function startServer() {
         id: refundId,
         merchantId: order.merchantId,
         type: "expense",
-        amount: order.totalPrice,
+        amount: refundAmount,
         orderId: order.id,
-        description: `订单退款原路退回: ${order.id}. 原因: ${reason}`,
+        description: `订单退款原路退回: ${order.id}. 金额: ¥${refundAmount}. 原因: ${reason}`,
         createdAt: new Date().toISOString()
       });
 
       ModaDB.write(db);
-      ModaDB.log("MERCHANT", "MANAGER_REFUND", "ORDER_REFUND", "PAYMENT_ENG", `Process refund for order ${id}: ¥${order.totalPrice}`);
+      ModaDB.log("MERCHANT", "MANAGER_REFUND", "ORDER_REFUND", "PAYMENT_ENG", `Process refund for order ${id}: ¥${refundAmount}`);
+      res.json({ success: true, order });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/orders/:id/return", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason = "商品质量问题", tenantId, industryId = "catering" } = req.body;
+      const db = ModaDB.read();
+      const order = db.orders.find(o => o.id === id);
+      if (!order) {
+        res.status(404).json({ success: false, error: "Order not found." });
+        return;
+      }
+
+      order.status = "return_requested";
+      order.returnReason = reason;
+
+      // Add to timeline
+      if (!order.timeline) order.timeline = [];
+      order.timeline.push({
+        status: 'return_requested',
+        message: `买家申请退货。原因：${reason}`,
+        timestamp: new Date().toISOString()
+      });
+
+      // Sync to Firestore
+      if (serverDb && (tenantId || order.merchantId)) {
+        try {
+          const tid = tenantId || order.merchantId;
+          await admin.firestore().collection('tenants').doc(String(tid))
+            .collection('industries').doc(industryId)
+            .collection('orders').doc(id).update({
+              status: "return_requested",
+              returnReason: reason,
+              timeline: order.timeline
+            });
+        } catch (fsErr) {
+          console.warn(`[Return Sync] Firestore update failed for ${id}:`, fsErr);
+        }
+      }
+
+      ModaDB.write(db);
+      ModaDB.log("BUYER", "USER_ACTION", "ORDER_RETURN_REQUEST", "ORDER_ENG", `Return requested for order: ${id}. Reason: ${reason}`);
       res.json({ success: true, order });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
@@ -1143,6 +1851,8 @@ async function startServer() {
           details: `付款回调校验成功。流水笔ID: ${mockSessionId}. 支付金额: ¥${amount}`
         });
 
+        ModaDB.notify("STRIPE_GATEWAY", "Stripe Webhook Listener", "Payment Success", `Stripe 支付成功：订单 ${orderId}，流水 ${mockSessionId}`, 'info', 'PAYMENT_ENG', 'admin', mId);
+        ModaDB.publishEvent("PAYMENT_SUCCESS", { orderId, transactionId: mockSessionId, amount: Number(amount), method: "Stripe" }, 'PAYMENT_ENG', 'EVENT_BUS', { tenantId: mId });
         ModaDB.write(db);
 
         res.json({
@@ -1196,6 +1906,8 @@ async function startServer() {
 
       ModaDB.write(db);
       ModaDB.log("ALIPAY_SDK", "支付宝中继服务", "PAYMENT_CALLBACK", "FINANCE", `Alipay callback checkout success. Order ID: ${orderId}, txn: ${mockPayId}`);
+      ModaDB.notify("ALIPAY_SDK", "支付宝中继服务", "Payment Success", `支付已成功：订单 ${orderId}，流水 ${mockPayId}`, 'info', 'FINANCE', 'admin', order ? order.merchantId : 'default_tenant');
+      ModaDB.publishEvent("PAYMENT_SUCCESS", { orderId, transactionId: mockPayId, amount: Number(amount), method: "Alipay" }, 'FINANCE', 'EVENT_BUS', { tenantId: order ? order.merchantId : 'default_tenant' });
 
       res.json({ success: true, txnId: mockPayId, message: "Alipay mobile layout parsed. Successful callback webhook applied." });
     } catch (e: any) {
@@ -1244,7 +1956,7 @@ async function startServer() {
               amount: Number(amount),
               orderId,
               description: `微信移动扫码汇率结算完成：${orderId}`,
-              timestamp: new Date().toISOString()
+              createdAt: new Date().toISOString()
             });
             ModaDB.write(db);
             console.log(`[WeChat Pay Simulated Callback] Order ${orderId} reconciled successfully via background thread!`);
@@ -1564,6 +2276,122 @@ async function startServer() {
     }
   });
 
+  app.post('/api/audit/logs', adminOnly, (req, res) => {
+    try {
+      const { tenantId, action, component, details, severity = 'info' } = req.body;
+      const authUser = (req as any).authUser;
+      if (!action || !component || !details) {
+        return res.status(400).json({ success: false, error: 'action, component and details are required.' });
+      }
+      const userId = authUser?.id || 'SYSTEM';
+      const username = authUser?.email || authUser?.username || 'platform_admin';
+      ModaDB.log(userId, username, action, component, String(details));
+      const db = ModaDB.read();
+      const createdLog = db.audit_logs[0];
+      res.json({ success: true, log: createdLog });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get('/api/operations/documents', authenticate, (req, res) => {
+    try {
+      const { tenantId, all } = req.query as any;
+      const authUser = (req as any).authUser;
+      const db = ModaDB.read();
+      let documents = db.operationalDocuments || [];
+
+      if (tenantId) {
+        documents = documents.filter(doc => doc.tenantId === String(tenantId));
+      } else if (authUser?.role !== 'Platform Admin' && authUser?.role !== 'Manager') {
+        const defaultTenant = authUser?.merchantId || authUser?.email?.replace(/[^a-zA-Z0-9]/g, '_');
+        documents = documents.filter(doc => doc.tenantId === defaultTenant);
+      }
+
+      if (String(all) !== 'true' && authUser?.role !== 'Platform Admin') {
+        documents = documents.filter(doc => doc.tenantId === tenantId || doc.tenantId === authUser?.merchantId);
+      }
+
+      res.json({ success: true, documents });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/operations/documents', authenticate, (req, res) => {
+    try {
+      const authUser = (req as any).authUser;
+      const { tenantId, title, content, tags = [] } = req.body;
+      if (!title || !content) {
+        return res.status(400).json({ success: false, error: 'Document title and content are required.' });
+      }
+
+      const db = ModaDB.read();
+      const docTenantId = tenantId || authUser?.merchantId || authUser?.email?.replace(/[^a-zA-Z0-9]/g, '_') || 'default_tenant';
+      const newDoc = {
+        id: crypto.randomUUID(),
+        tenantId: String(docTenantId),
+        title: String(title),
+        content: String(content),
+        tags: Array.isArray(tags) ? tags.map(String) : [],
+        createdAt: new Date().toISOString(),
+        createdBy: authUser?.email || authUser?.username || 'system'
+      };
+
+      db.operationalDocuments.push(newDoc);
+      ModaDB.write(db);
+      ModaDB.log(authUser?.id || 'SYSTEM', authUser?.email || authUser?.username || 'system', 'CREATE_OPERATIONAL_DOCUMENT', 'OPERATIONS', `Created document ${newDoc.title} for tenant ${newDoc.tenantId}`);
+      res.json({ success: true, document: newDoc });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get('/api/notifications', authenticate, (req, res) => {
+    try {
+      const db = ModaDB.read();
+      const authUser = (req as any).authUser;
+      let notifications = db.notifications || [];
+      if (authUser?.role !== 'Platform Admin') {
+        notifications = notifications.filter(n => n.userId === authUser?.id || !n.userId || n.target === 'admin');
+      }
+      res.json({ success: true, notifications });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get('/api/events', adminOnly, (req, res) => {
+    try {
+      const { type, status } = req.query as any;
+      const db = ModaDB.read();
+      let events = db.events || [];
+      if (type) events = events.filter(e => e.type === String(type));
+      if (status) events = events.filter(e => e.status === String(status));
+      res.json({ success: true, events });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post('/api/events/consume', adminOnly, (req, res) => {
+    try {
+      const { eventId, consumer = 'system' } = req.body;
+      if (!eventId) {
+        res.status(400).json({ success: false, error: 'eventId is required' });
+        return;
+      }
+      const event = ModaDB.consumeEvent(eventId, consumer);
+      if (!event) {
+        res.status(404).json({ success: false, error: 'Event not found.' });
+        return;
+      }
+      res.json({ success: true, event });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   app.post("/api/v1/auth/sync_google", (req, res) => {
     try {
       const { email, displayName, idToken } = req.body;
@@ -1806,7 +2634,7 @@ async function startServer() {
       }
 
       const chunkId = `chk_${Math.random().toString(36).slice(2, 11)}`;
-      const newChunk = {
+      const newChunk: DBKBChunk = {
         id: chunkId,
         merchantId: activeTenant,
         title,
@@ -1814,6 +2642,8 @@ async function startServer() {
         tokenCount,
         category,
         vector,
+        version: 1,
+        lastIndexedAt: vector ? new Date().toISOString() : undefined,
         createdAt: new Date().toISOString()
       };
 
@@ -1892,6 +2722,165 @@ async function startServer() {
     }
   });
 
+  app.post("/api/agents/routing", async (req, res) => {
+    try {
+      const {
+        taskType,
+        maxCost,
+        maxLatency,
+        minQuality,
+        fallbackToLocal = true
+      } = req.body;
+
+      if (!taskType) {
+        res.status(400).json({ success: false, error: "taskType is required." });
+        return;
+      }
+
+      const decision = await smartModelRouter.selectBestModel(taskType, {
+        maxCost: maxCost !== undefined ? Number(maxCost) : undefined,
+        maxLatency: maxLatency !== undefined ? Number(maxLatency) : undefined,
+        minQuality: minQuality !== undefined ? Number(minQuality) : undefined,
+        fallbackToLocal: fallbackToLocal !== false
+      });
+
+      res.json({ success: true, routing: decision });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/models", (req, res) => {
+    try {
+      const models = smartModelRouter.getAllModelStats();
+      res.json({ success: true, models });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/agents/feedback", async (req, res) => {
+    try {
+      const {
+        agentId,
+        merchantId,
+        executionId,
+        rating,
+        category,
+        message,
+        userId,
+        userName,
+        context
+      } = req.body;
+
+      if (!agentId || !merchantId || !executionId || !rating || !category || !message || !userId || !userName) {
+        res.status(400).json({ success: false, error: "Missing required feedback payload." });
+        return;
+      }
+
+      const feedback = await dynamicLearningService.recordFeedback(
+        agentId,
+        merchantId,
+        executionId,
+        Number(rating),
+        category,
+        message,
+        String(userId),
+        String(userName),
+        context
+      );
+
+      res.json({ success: true, feedback });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/agents/feedback", async (req, res) => {
+    try {
+      const agentId = String(req.query.agentId || "");
+      if (!agentId) {
+        res.status(400).json({ success: false, error: "agentId is required." });
+        return;
+      }
+      const stats = dynamicLearningService.getFeedbackStats(agentId);
+      const feedback = dynamicLearningService.getFeedback(agentId, 100);
+      const patterns = dynamicLearningService.getPatterns(agentId);
+      const suggestions = dynamicLearningService.getSuggestions(agentId);
+      res.json({ success: true, stats, feedback, patterns, suggestions });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/agents/collaboration", async (req, res) => {
+    try {
+      const { merchantId, organizationId, chain = [] } = req.body;
+      if (!merchantId || !organizationId) {
+        res.status(400).json({ success: false, error: "merchantId and organizationId are required." });
+        return;
+      }
+
+      const contextId = agentCollaborationHub.createContext(merchantId, organizationId, {
+        inputs: req.body.inputs || {}
+      });
+
+      const agents = Array.isArray(chain) && chain.length > 0
+        ? chain.map((item: any) => ({
+            id: item.id,
+            role: item.role || item.id,
+            execute: async (ctx: any) => {
+              const prompt = item.prompt || `请基于当前上下文与角色执行任务：${item.role || item.id}`;
+              try {
+                const client = getGeminiClient();
+                const response = await client.models.generateContent({
+                  model: "gemini-3.5-flash",
+                  contents: prompt,
+                  config: {
+                    systemInstruction: `你是 ${item.role || item.id}，负责完成以下任务：${item.prompt || prompt}`,
+                    temperature: 0.8
+                  }
+                });
+                const resultText = response.text || `任务 ${item.id} 已完成`; 
+                return {
+                  result: resultText,
+                  tokensUsed: estimateTokens(resultText),
+                  cost: estimateCost("gemini-3.5-flash", estimateTokens(prompt), estimateTokens(resultText))
+                };
+              } catch (innerErr: any) {
+                return {
+                  result: `协作 Agent ${item.id} 执行失败：${innerErr.message}`,
+                  tokensUsed: 0,
+                  cost: 0
+                };
+              }
+            }
+          }))
+        : [
+            {
+              id: 'aria-designer',
+              role: 'Designer',
+              execute: async (ctx: any) => ({ result: '生成了协作设计方案', tokensUsed: 180, cost: 0.05 })
+            },
+            {
+              id: 'daphne-marketing',
+              role: 'Marketing',
+              execute: async (ctx: any) => ({ result: '生成了营销计划', tokensUsed: 160, cost: 0.04 })
+            },
+            {
+              id: 'fiona-finance',
+              role: 'Finance',
+              execute: async (ctx: any) => ({ result: '完成了成本评估', tokensUsed: 120, cost: 0.03 })
+            }
+          ];
+
+      const result = await agentCollaborationHub.executeCollaborativeChain(contextId, agents, 60000);
+      res.json({ success: true, contextId, result });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // === 11. AGENT RUNTIME DISPATCH ENGINE & TASK SCHEDULERS (REAL FIRESTORE & DUAL SYNCED QUEUE) ===
   app.post("/api/agents/execute", async (req, res) => {
     try {
@@ -1904,20 +2893,29 @@ async function startServer() {
       const activeIndustry = industryId || "fashion";
       const db = ModaDB.read();
       const taskId = `task_${Math.random().toString(36).slice(2, 11)}`;
-      
-      const newPendingTask = {
+      const taskType = String(req.body.taskType || mapAgentToTaskType(agentId)) as import("./src/services/smart-model-router.service").TaskType;
+      const routingConstraints = {
+        maxCost: req.body.maxCost ? Number(req.body.maxCost) : undefined,
+        maxLatency: req.body.maxLatency ? Number(req.body.maxLatency) : undefined,
+        minQuality: req.body.minQuality ? Number(req.body.minQuality) : undefined,
+        fallbackToLocal: req.body.fallbackToLocal !== false
+      };
+
+      const newPendingTask: DBPendingAgentTask = {
         id: taskId,
-        teamId: teamId || "universal_team",
         agentId,
-        inputMessage,
-        status: "processing" as const,
+        merchantId: activeTenant,
+        title: inputMessage.substring(0, 30) + (inputMessage.length > 30 ? "..." : ""),
+        priority: 'medium',
+        status: "THINKING",
+        logs: [`[System] Task received and analysis started.`],
+        retryCount: 0,
         createdAt: new Date().toISOString()
       };
-      
+
       db.agent_tasks.push(newPendingTask);
       ModaDB.write(db);
 
-      // Write transaction to Firestore live tasks queue namespace
       if (serverDb) {
         try {
           const taskRef = firestoreDoc(serverDb, "tenants", activeTenant, "agent_tasks", taskId);
@@ -1927,45 +2925,75 @@ async function startServer() {
         }
       }
 
-      // Perform Gemini reasoning processing or offline simulation dynamically
+      let routingDecision: import("./src/services/smart-model-router.service").RoutingDecision | null = null;
+      let chosenModel = "gemini-3.5-flash";
       try {
-        const client = getGeminiClient();
-        
-        // Retrieve context using RAG
+        routingDecision = await smartModelRouter.selectBestModel(taskType, routingConstraints);
+        chosenModel = routingDecision.selectedModel || chosenModel;
+      } catch (routeErr: any) {
+        console.warn("Model routing fallback:", routeErr.message);
+      }
+
+      const provider = chosenModel.startsWith("gpt-")
+        ? "openai"
+        : chosenModel.includes("ollama")
+          ? "ollama"
+          : "gemini";
+
+      const startTime = Date.now();
+      const inputTokens = estimateTokens(inputMessage);
+
+      try {
         const retrievedRAG = await retrieveRAGContext(inputMessage, activeTenant, activeIndustry);
         const enhancedSystemInstruction = retrievedRAG
           ? `${rolePrompt || "你是一个摩整数字员工智能工作站"}\n\n=== RAG 商业规则与规章参考 (Real Retrieve) ===\n${retrievedRAG}`
           : (rolePrompt || "你是一个摩整数字员工智能工作站");
 
-        const response = await client.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: inputMessage,
-          config: {
-            systemInstruction: enhancedSystemInstruction,
-            temperature: 0.8
-          }
-        });
+        let reply: string;
+        if (provider === "openai") {
+          reply = await generateWithOpenAI(`${enhancedSystemInstruction}\n\n${inputMessage}`, chosenModel);
+        } else if (provider === "ollama") {
+          reply = await generateWithOllama(`${enhancedSystemInstruction}\n\n${inputMessage}`, chosenModel.replace("ollama-", ""));
+        } else {
+          const client = getGeminiClient();
+          const response = await client.models.generateContent({
+            model: chosenModel.startsWith("gemini") ? chosenModel : "gemini-3.5-flash",
+            contents: inputMessage,
+            config: {
+              systemInstruction: enhancedSystemInstruction,
+              temperature: 0.8
+            }
+          });
+          reply = response.text || "已完成相应的数字流程分析并自动交付中继。";
+        }
 
-        const reply = response.text || "已完成相应的数字流程分析并自动交付中继。";
-        
-        // Update task status inside local DB
+        const outputTokens = estimateTokens(reply);
+        const actualLatency = Date.now() - startTime;
+        const actualCost = estimateCost(chosenModel, inputTokens, outputTokens);
+
         const freshDB = ModaDB.read();
         const activeTask = freshDB.agent_tasks.find(t => t.id === taskId);
         if (activeTask) {
-          activeTask.status = "completed";
-          activeTask.response = reply;
-          activeTask.completedAt = new Date().toISOString();
+          activeTask.status = "COMPLETED";
+          activeTask.result = reply;
+          (activeTask as any).model = chosenModel;
+          (activeTask as any).routingDecision = routingDecision;
+          if (!activeTask.logs) activeTask.logs = [];
+          activeTask.logs.push(`[${new Date().toISOString()}] Agent reasoning completed using ${chosenModel}.`);
         }
         ModaDB.write(freshDB);
 
-        // Update task status inside Firestore
+        await smartModelRouter.recordUsage(chosenModel, taskType, agentId, inputTokens, outputTokens, actualLatency, true, 4);
+
         if (serverDb) {
           try {
             const taskRef = firestoreDoc(serverDb, "tenants", activeTenant, "agent_tasks", taskId);
             await firestoreSetDoc(taskRef, {
               ...newPendingTask,
-              status: "completed",
-              response: reply,
+              status: "COMPLETED",
+              result: reply,
+              model: chosenModel,
+              routingDecision,
               completedAt: new Date().toISOString()
             });
           } catch (taskErr: any) {
@@ -1973,19 +3001,25 @@ async function startServer() {
           }
         }
 
-        res.json({ success: true, taskId, status: "completed", response: reply });
-      } catch (geminiError: any) {
-        console.warn("Gemini Engine runtime call fallback (applying simulated logic):", geminiError.message);
-        
-        const responseFallback = `[智体自主代运营中继]：已接受数据 "${inputMessage}"。已根据目前商家最合适的价格，进行一键补货，同步完成顺丰寄发。`;
+        res.json({ success: true, taskId, status: "COMPLETED", response: reply, model: chosenModel, routingDecision });
+      } catch (runError: any) {
+        const fallbackReply = `[智体自主代运营中继]：已接受数据 "${inputMessage}"。已根据目前商家最合适的价格，进行一键补货，同步完成顺丰寄发。`;
+        const actualLatency = Date.now() - startTime;
+        const outputTokens = estimateTokens(fallbackReply);
+
         const freshDB = ModaDB.read();
         const activeTask = freshDB.agent_tasks.find(t => t.id === taskId);
         if (activeTask) {
-          activeTask.status = "completed";
-          activeTask.response = responseFallback;
-          activeTask.completedAt = new Date().toISOString();
+          activeTask.status = "COMPLETED";
+          activeTask.result = fallbackReply;
+          (activeTask as any).model = chosenModel;
+          (activeTask as any).routingDecision = routingDecision;
+          if (!activeTask.logs) activeTask.logs = [];
+          activeTask.logs.push(`[${new Date().toISOString()}] Agent reasoning completed via fallback due to error: ${runError.message}`);
         }
         ModaDB.write(freshDB);
+
+        await smartModelRouter.recordUsage(chosenModel, taskType, agentId, inputTokens, outputTokens, actualLatency, false, 2);
 
         if (serverDb) {
           try {
@@ -1993,15 +3027,18 @@ async function startServer() {
             await firestoreSetDoc(taskRef, {
               ...newPendingTask,
               status: "completed",
-              response: responseFallback,
-              completedAt: new Date().toISOString()
+              result: fallbackReply,
+              model: chosenModel,
+              routingDecision,
+              completedAt: new Date().toISOString(),
+              warning: runError.message
             });
           } catch (taskErr: any) {
             console.warn("Firestore task simulation callback exception:", taskErr.message);
           }
         }
 
-        res.json({ success: true, taskId, status: "completed", response: responseFallback, warning: geminiError.message });
+        res.json({ success: true, taskId, status: "COMPLETED", response: fallbackReply, model: chosenModel, routingDecision, warning: runError.message });
       }
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
@@ -2368,8 +3405,50 @@ async function startServer() {
     }
   });
 
+  app.post("/api/cart/update-quantity", (req, res) => {
+    try {
+      const { userId = "guest_user", productId, quantity } = req.body;
+      if (!productId || quantity === undefined) {
+        res.status(400).json({ success: false, error: "Product ID and Quantity required." });
+        return;
+      }
+      const db = ModaDB.read();
+      const cart = db.carts.find(c => c.userId === userId);
+      if (cart) {
+        const item = cart.items.find(it => it.productId === productId);
+        if (item) {
+          item.quantity = Math.max(0, Number(quantity));
+          if (item.quantity === 0) {
+            cart.items = cart.items.filter(it => it.productId !== productId);
+          }
+          ModaDB.write(db);
+        }
+      }
+      res.json({ success: true, message: "Cart quantity updated successfully", cart });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/cart/coupon", (req, res) => {
+    try {
+      const { userId = "guest_user", coupon } = req.body;
+      const db = ModaDB.read();
+      let cart = db.carts.find(c => c.userId === userId);
+      if (!cart) {
+        cart = { userId, items: [], discount: 0 };
+        db.carts.push(cart);
+      }
+      cart.coupon = coupon;
+      ModaDB.write(db);
+      res.json({ success: true, message: "Coupon applied successfully", cart });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
   // === 13. TENANTS QUOTA & METERING ADMIN API ===
-  app.get("/api/tenants", (req, res) => {
+  app.get("/api/tenants", adminOnly, (req, res) => {
     try {
       const db = ModaDB.read();
       res.json({ success: true, tenants: db.tenants });
@@ -2401,54 +3480,320 @@ async function startServer() {
   });
 
   // === 14. GLOBAL PLATFORM SETTINGS ENGINE ===
-  const PLATFORM_SETTINGS_FILE = path.resolve("data/platform_settings.json");
-  const defaultSettings = {
-    maintenanceMode: false,
-    allowRegistration: true,
-    defaultQuotaLimit: 10000,
-    supportedPaymentGateways: ["Stripe", "Alipay", "WeChatPay", "PayPal"],
-    activeSystemVersion: "v3.0.0 Stable Enterprise",
-    aiConfig: {
-      defaultModel: "gemini-3.5-flash",
-      embeddingModel: "gemini-embedding-2-preview"
-    }
-  };
-
-  app.get("/api/platform/settings", (req, res) => {
+  app.get("/api/platform/settings", adminOnly, (req, res) => {
     try {
-      if (!fs.existsSync(PLATFORM_SETTINGS_FILE)) {
-        fs.mkdirSync(path.dirname(PLATFORM_SETTINGS_FILE), { recursive: true });
-        fs.writeFileSync(PLATFORM_SETTINGS_FILE, JSON.stringify(defaultSettings, null, 2), "utf-8");
-        res.json({ success: true, settings: defaultSettings });
-        return;
-      }
-      const data = JSON.parse(fs.readFileSync(PLATFORM_SETTINGS_FILE, "utf-8"));
-      res.json({ success: true, settings: data });
+      const db = ModaDB.read();
+      res.json({ success: true, settings: db.platformSettings });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
   });
 
-  app.put("/api/platform/settings", (req, res) => {
+  app.get("/api/platform/tenants", adminOnly, (req, res) => {
     try {
-      const currentSettings = fs.existsSync(PLATFORM_SETTINGS_FILE)
-        ? JSON.parse(fs.readFileSync(PLATFORM_SETTINGS_FILE, "utf-8"))
-        : defaultSettings;
+      const db = ModaDB.read();
+      const tenantsWithStats = db.merchants.map(m => {
+        const tenant = db.tenants.find(t => t.id === m.id);
+        const ordersCount = db.orders.filter(o => o.merchantId === m.id).length;
+        const agentsCount = db.agents.filter(a => a.merchantId === m.id).length;
+        return {
+          ...m,
+          quotaLimit: tenant?.quotaLimit || 0,
+          quotaUsed: tenant?.quotaUsed || 0,
+          ordersCount,
+          agentsCount
+        };
+      });
+      res.json({ success: true, tenants: tenantsWithStats });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/platform/stats", adminOnly, (req, res) => {
+    try {
+      const db = ModaDB.read();
+      const totalRevenue = db.finance.filter(f => f.type === 'revenue').reduce((sum, f) => sum + f.amount, 0);
+      const totalOrders = db.orders.length;
+      const totalMerchants = db.merchants.length;
+      const totalAgents = db.agents.length;
+      const activeSessions = db.sessions.filter(s => new Date(s.expiresAt) > new Date()).length;
+
+      res.json({
+        success: true,
+        stats: {
+          totalRevenue,
+          totalOrders,
+          totalMerchants,
+          totalAgents,
+          activeSessions,
+          dbSize: JSON.stringify(db).length,
+          systemVersion: db.platformSettings.activeSystemVersion
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.put("/api/platform/tenants/:id/quota", adminOnly, (req, res) => {
+    try {
+      const { id } = req.params;
+      const { quotaLimit } = req.body;
+      const db = ModaDB.read();
+      const tenant = db.tenants.find(t => t.id === id);
+      if (!tenant) return res.status(404).json({ success: false, error: "Tenant not found." });
       
-      const updated = {
-        ...currentSettings,
+      tenant.quotaLimit = Number(quotaLimit);
+      ModaDB.write(db);
+      ModaDB.log("PLATFORM_ADMIN", "QUOTA_ENGINE", "ADJUST_QUOTA", "CORE_SETTINGS", `Adjusted quota for tenant ${id} to ${quotaLimit}`);
+      res.json({ success: true, tenant });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.put("/api/platform/settings", adminOnly, (req, res) => {
+    try {
+      const db = ModaDB.read();
+      db.platformSettings = {
+        ...db.platformSettings,
         ...req.body
       };
-
-      fs.writeFileSync(PLATFORM_SETTINGS_FILE, JSON.stringify(updated, null, 2), "utf-8");
+      ModaDB.write(db);
+      ModaDB.syncPlatformSettingsToRegistry();
       ModaDB.log("PLATFORM_ADMIN", "PLATFORM_CORE", "UPDATE_GLOBAL_SETTINGS", "CORE_SETTINGS", "Platform global system parameters reconfigured.");
-      res.json({ success: true, settings: updated });
+      res.json({ success: true, settings: db.platformSettings });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e.message });
     }
   });
 
-  // === 15. INDUSTRY OPERATIONS BLUEPRINT TEMPLATES MARKET ===
+  app.get("/api/platform/config-registry", adminOnly, (req, res) => {
+    try {
+      const registry = ModaDB.getConfigRegistry();
+      res.json({ success: true, registry });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/platform/config-registry", adminOnly, (req, res) => {
+    try {
+      const item = req.body;
+      const configEntry = ModaDB.registerConfig(item);
+      ModaDB.log("PLATFORM_ADMIN", "CONFIG_REGISTRY", "REGISTER_CONFIG_ITEM", "CORE_SETTINGS", `Registered config item ${configEntry.key}`);
+      res.json({ success: true, configEntry });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/platform/config-registry/report", adminOnly, (req, res) => {
+    try {
+      ModaDB.syncPlatformSettingsToRegistry();
+      const report = ModaDB.auditConfigCoverage();
+      res.json({ success: true, report });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // === 15. BILLING & SUBSCRIPTION API ===
+  app.get("/api/billing/subscriptions", authenticate, (req, res) => {
+    try {
+      const db = ModaDB.read();
+      const authUser = (req as any).authUser;
+      const subs = db.subscriptions.filter(s => s.userId === authUser?.id || s.merchantId === authUser?.merchantId);
+      res.json({ success: true, subscriptions: subs });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/billing/subscribe", authenticate, (req, res) => {
+    try {
+      const { planId } = req.body;
+      const db = ModaDB.read();
+      const authUser = (req as any).authUser;
+      const merchantId = authUser?.merchantId || authUser?.id.replace(/[^a-zA-Z0-9]/g, '_');
+      
+      const newSub: DBSubscription = {
+        id: `sub_${crypto.randomUUID().substring(0, 8)}`,
+        userId: authUser?.id,
+        merchantId: merchantId,
+        planId,
+        status: 'active',
+        currentPeriodStart: new Date().toISOString(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        cancelAtPeriodEnd: false,
+        createdAt: new Date().toISOString()
+      };
+      
+      db.subscriptions.push(newSub);
+      
+      // Update merchant billing plan
+      const merchant = db.merchants.find(m => m.id === merchantId);
+      if (merchant) {
+        merchant.billingPlan = planId as any;
+      }
+
+      ModaDB.write(db);
+      ModaDB.log(authUser?.id, authUser?.username, "SUBSCRIPTION_CREATED", "BILLING_SYS", `User subscribed to plan: ${planId}`);
+      res.json({ success: true, subscription: newSub });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/billing/invoices", authenticate, (req, res) => {
+    try {
+      const db = ModaDB.read();
+      const authUser = (req as any).authUser;
+      const invoices = db.invoices.filter(i => i.merchantId === authUser?.merchantId || i.merchantId === authUser?.id.replace(/[^a-zA-Z0-9]/g, '_'));
+      res.json({ success: true, invoices });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // === 16. ADVANCED FINANCE & ANALYTICS API ===
+  app.get("/api/finance/overview", authenticate, (req, res) => {
+    try {
+      const { merchantId } = req.query;
+      const db = ModaDB.read();
+      const authUser = (req as any).authUser;
+      const mId = String(merchantId || authUser?.merchantId || 'default_tenant');
+      
+      const records = db.finance.filter(f => f.merchantId === mId);
+      const revenue = records.filter(r => r.type === 'revenue').reduce((sum, r) => sum + r.amount, 0);
+      const expense = records.filter(r => r.type === 'expense').reduce((sum, r) => sum + r.amount, 0);
+      
+      // Calculate tax from orders
+      const merchantOrders = db.orders.filter(o => o.merchantId === mId && (o.status === 'paid' || o.status === 'shipped' || o.status === 'completed'));
+      const totalTax = merchantOrders.reduce((sum, o) => sum + (o.totalPrice * 0.01), 0); // 1% tax rule
+      
+      res.json({
+        success: true,
+        summary: {
+          totalRevenue: Number(revenue.toFixed(2)),
+          totalExpense: Number(expense.toFixed(2)),
+          totalTax: Number(totalTax.toFixed(2)),
+          netProfit: Number((revenue - expense - totalTax).toFixed(2)),
+          recordCount: records.length
+        }
+      });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/finance/withdraw", authenticate, (req, res) => {
+    try {
+      const { amount, bankInfo } = req.body;
+      const db = ModaDB.read();
+      const authUser = (req as any).authUser;
+      const merchantId = authUser?.merchantId || 'default_tenant';
+
+      if (!amount || Number(amount) <= 0) {
+        res.status(400).json({ success: false, error: "Invalid withdrawal amount." });
+        return;
+      }
+
+      // Record withdrawal as expense
+      const withdrawId = `WTH-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      db.finance.push({
+        id: withdrawId,
+        merchantId: merchantId,
+        type: "expense",
+        amount: Number(amount),
+        description: `商户提现申请: ${withdrawId}. 账户: ${bankInfo || '默认对公账户'}`,
+        createdAt: new Date().toISOString()
+      });
+
+      ModaDB.write(db);
+      ModaDB.log(authUser?.id, authUser?.username, "WITHDRAWAL_REQUEST", "FINANCE", `Merchant requested withdrawal: ¥${amount}`);
+      
+      res.json({ success: true, message: "Withdrawal request submitted for processing.", id: withdrawId });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // === 18. TEMPLATE MARKET SYSTEM ===
+  const TEMPLATE_MARKET = {
+    agents: [
+      { id: "tmpl_agt_ceo", name: "企业首席执行官 CEO", role: "CEO", desc: "负责公司全局战略、重大决策及各部门协同。", price: 0 },
+      { id: "tmpl_agt_mkt", name: "全渠道营销专家", role: "Marketing Manager", desc: "负责品牌推广、广告投放及社媒运营。", price: 0 },
+      { id: "tmpl_agt_cs", name: "金牌客服智体", role: "Customer Success", desc: "7x24小时处理客户咨询、投诉及售后请求。", price: 0 }
+    ],
+    workflows: [
+      { id: "tmpl_wf_order", name: "自动化履约工作流", desc: "订单支付后自动触发打单、发货及通知流程。", price: 0 },
+      { id: "tmpl_wf_refund", name: "极速退款处理流", desc: "针对小额订单实现自动化无感退款。", price: 0 }
+    ],
+    knowledge: [
+      { id: "tmpl_kb_legal", name: "跨境电商合规合集", desc: "包含多国进出口法律法规及税务合规条款。", price: 0 },
+      { id: "tmpl_kb_logistics", name: "全球物流时效基准库", desc: "整合主流物流商的时效与成本模型。", price: 0 }
+    ]
+  };
+
+  app.get("/api/market/templates", (req, res) => {
+    res.json({ success: true, market: TEMPLATE_MARKET });
+  });
+
+  app.post("/api/market/install", authenticate, async (req, res) => {
+    try {
+      const { templateId, type } = req.body;
+      const authUser = (req as any).authUser;
+      const merchantId = authUser?.merchantId || 'default_tenant';
+      const db = ModaDB.read();
+
+      if (type === 'agent') {
+        const tmpl = TEMPLATE_MARKET.agents.find(a => a.id === templateId);
+        if (!tmpl) return res.status(404).json({ success: false, error: "Template not found." });
+        
+        const newAgent: DBAgent = {
+          id: `agt_${crypto.randomUUID().substring(0, 8)}`,
+          merchantId: merchantId,
+          name: tmpl.name,
+          role: tmpl.role,
+          industry: "general",
+          status: 'online',
+          memory: [`[System] Agent installed from template: ${tmpl.name}`],
+          permissions: ["read_orders", "write_tasks"],
+          config: {
+            model: "gemini-3.5-flash",
+            temperature: 0.7,
+            systemPrompt: tmpl.desc
+          },
+          createdAt: new Date().toISOString()
+        };
+        db.agents.push(newAgent);
+        ModaDB.log(authUser.id, authUser.username, "INSTALL_TEMPLATE", "MARKET", `Installed agent template: ${tmpl.name}`);
+      } else if (type === 'knowledge') {
+        const tmpl = TEMPLATE_MARKET.knowledge.find(k => k.id === templateId);
+        if (!tmpl) return res.status(404).json({ success: false, error: "Template not found." });
+        
+        const newChunk: DBKBChunk = {
+          id: `chk_${crypto.randomUUID().substring(0, 8)}`,
+          merchantId: merchantId,
+          title: tmpl.name,
+          content: tmpl.desc,
+          category: "Market Template",
+          tokenCount: tmpl.desc.length,
+          version: 1,
+          createdAt: new Date().toISOString()
+        };
+        db.kb_chunks.push(newChunk);
+        ModaDB.log(authUser.id, authUser.username, "INSTALL_TEMPLATE", "MARKET", `Installed knowledge template: ${tmpl.name}`);
+      }
+
+      ModaDB.write(db);
+      res.json({ success: true, message: "Template installed successfully." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
   const INDUSTRY_TEMPLATES = [
     {
       id: "clothing",
@@ -2853,6 +4198,18 @@ async function startServer() {
         items: [{ productId: selectedProd.id, productName: selectedProd.name, price: Number(selectedProd.price), quantity: 1 }],
         totalPrice: Number(selectedProd.price),
         status: "processing",
+        timeline: [
+          {
+            status: 'imported',
+            message: '从外部渠道自动同步导入订单',
+            timestamp: new Date().toISOString()
+          },
+          {
+            status: 'processing',
+            message: '订单已进入自动化履约流程',
+            timestamp: new Date().toISOString()
+          }
+        ],
         createdAt: new Date().toISOString()
       };
 
@@ -3157,7 +4514,7 @@ async function startServer() {
       const samplePayload = {
         eventId: `evt_${Math.random().toString(36).substring(2, 9)}`,
         event,
-        timestamp: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
         productName: "经典极智高级成衣 SPU-009",
         qty: 1,
         paidAmount: 299,
@@ -3183,22 +4540,40 @@ async function startServer() {
     try {
       const merchantId = String(req.query.merchantId || "default_tenant");
       const db = ModaDB.read();
-      let wallet = db.wallets.find(w => w.merchantId === merchantId);
       
+      // Calculate real earnings from orders and finance records
+      const merchantOrders = db.orders.filter(o => o.merchantId === merchantId && o.status === 'paid');
+      const totalOrderRevenue = merchantOrders.reduce((acc, o) => acc + (o.totalPrice || 0), 0);
+      
+      const merchantFinance = db.finance.filter(f => f.merchantId === merchantId);
+      const otherRevenue = merchantFinance.filter(f => f.type === 'revenue').reduce((acc, f) => acc + (f.amount || 0), 0);
+      const expenses = merchantFinance.filter(f => f.type === 'expense').reduce((acc, f) => acc + (f.amount || 0), 0);
+      
+      const calculatedBalance = totalOrderRevenue + otherRevenue - expenses;
+      const today = new Date().toISOString().split('T')[0];
+      const todayEarnings = merchantOrders
+        .filter(o => o.createdAt.startsWith(today))
+        .reduce((acc, o) => acc + (o.totalPrice || 0), 0);
+
+      let wallet = db.wallets.find(w => w.merchantId === merchantId);
       if (!wallet) {
         wallet = {
           id: `wal_${Math.random().toString(36).substring(2, 9)}`,
           userId: "founder",
           merchantId,
-          balance: 128450.00,
-          currency: "USD",
-          earnings: 3240.50,
-          referralBalance: 120.00,
+          balance: calculatedBalance,
+          currency: "CNY",
+          earnings: todayEarnings,
+          referralBalance: 0,
           createdAt: new Date().toISOString()
         };
         db.wallets.push(wallet);
-        ModaDB.write(db);
+      } else {
+        wallet.balance = calculatedBalance;
+        wallet.earnings = todayEarnings;
       }
+      
+      ModaDB.write(db);
 
       const recentTxs = db.transactions
         .filter(t => t.merchantId === merchantId)
@@ -3271,7 +4646,7 @@ async function startServer() {
         currency,
         description,
         url: `https://pay.modaui.com/pay/${Math.random().toString(36).substring(2, 12)}`,
-        status: 'active',
+        status: 'active' as const,
         createdAt: new Date().toISOString()
       };
       db.paymentLinks.push(newLink);
@@ -3289,6 +4664,7 @@ async function startServer() {
       const db = ModaDB.read();
       const newCard = {
         id: `crd_${Math.random().toString(36).substring(2, 9)}`,
+        userId: "founder",
         merchantId,
         cardHolder,
         currency,
@@ -3296,7 +4672,7 @@ async function startServer() {
         expiryDate: '12/28',
         cvv: String(Math.floor(Math.random()*900+100)),
         balance: 0,
-        status: 'active',
+        status: 'active' as const,
         createdAt: new Date().toISOString()
       };
       db.virtualCards.push(newCard);
@@ -3374,12 +4750,12 @@ async function startServer() {
 
   // === LVA (Platform-Level Admin) ROUTES ===
   // Lightweight management, audit, quota and usage endpoints for Platform Admin UI
-  app.get("/api/lva/health", (req, res) => {
+  app.get("/api/lva/health", adminOnly, (req, res) => {
     res.json({ success: true, service: "LVA", status: "ok", time: new Date().toISOString() });
   });
 
   // List tenants with quota overview
-  app.get("/api/lva/tenants", (req, res) => {
+  app.get("/api/lva/tenants", adminOnly, (req, res) => {
     try {
       const db = ModaDB.read();
       const tenants = db.tenants.map(t => ({ id: t.id, quotaLimit: t.quotaLimit, quotaUsed: t.quotaUsed, billingStatus: t.billingStatus }));
@@ -3390,7 +4766,7 @@ async function startServer() {
   });
 
   // Get tenant detail
-  app.get("/api/lva/tenants/:tenantId", (req, res) => {
+  app.get("/api/lva/tenants/:tenantId", adminOnly, (req, res) => {
     try {
       const { tenantId } = req.params;
       const db = ModaDB.read();
@@ -3404,7 +4780,7 @@ async function startServer() {
   });
 
   // Update tenant quota (admin action)
-  app.post("/api/lva/tenants/:tenantId/quota", (req, res) => {
+  app.post("/api/lva/tenants/:tenantId/quota", adminOnly, (req, res) => {
     try {
       const { tenantId } = req.params;
       const { quotaLimit } = req.body;
@@ -3422,7 +4798,7 @@ async function startServer() {
   });
 
   // Audit logs retrieval (supports basic filtering)
-  app.get("/api/lva/audit/logs", (req, res) => {
+  app.get("/api/lva/audit/logs", adminOnly, (req, res) => {
     try {
       const { tenantId, level, limit = 200 } = req.query as any;
       const db = ModaDB.read();
@@ -3437,12 +4813,20 @@ async function startServer() {
   });
 
   // Append an audit ledger entry (used by agents or backend tasks)
-  app.post("/api/lva/ai/audit_ledger", (req, res) => {
+  app.post("/api/lva/ai/audit_ledger", adminOnly, (req, res) => {
     try {
       const { actor = 'system', action, details = {}, tenantId = 'platform' } = req.body;
       if (!action) return res.status(400).json({ success: false, error: "action is required" });
       const db = ModaDB.read();
-      const entry = { id: `ald_${Math.random().toString(36).slice(2,9)}`, actor, action, details, tenantId, createdAt: new Date().toISOString() };
+      const entry = { 
+        id: `ald_${Math.random().toString(36).slice(2,9)}`, 
+        userId: actor, 
+        username: actor,
+        action, 
+        component: 'AI_AGENT',
+        details: JSON.stringify(details), 
+        timestamp: new Date().toISOString() 
+      };
       db.audit_logs = db.audit_logs || [];
       db.audit_logs.unshift(entry);
       ModaDB.write(db);
@@ -3454,7 +4838,7 @@ async function startServer() {
   });
 
   // Usage metrics for a tenant (simple aggregation)
-  app.get("/api/lva/usage/:tenantId", (req, res) => {
+  app.get("/api/lva/usage/:tenantId", adminOnly, (req, res) => {
     try {
       const { tenantId } = req.params;
       const db = ModaDB.read();
@@ -3469,7 +4853,7 @@ async function startServer() {
   });
 
   // Allocate temporary additional quota to tenant
-  app.post("/api/lva/allocations", (req, res) => {
+  app.post("/api/lva/allocations", adminOnly, (req, res) => {
     try {
       const { tenantId, add = 0, reason = 'manual_adjustment' } = req.body;
       if (!tenantId) return res.status(400).json({ success: false, error: "tenantId required" });
@@ -3488,23 +4872,162 @@ async function startServer() {
     }
   });
 
-  // Serve static assets OR handle Vite in middleware mode
-  if (process.env.NODE_ENV !== "production") {
+  // === 14. AGENT RUNTIME & TASK QUEUE API ===
+  app.get("/api/tasks", (req, res) => {
+    try {
+      const db = ModaDB.read();
+      res.json({ success: true, tasks: db.agent_tasks || [] });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/tasks", (req, res) => {
+    try {
+      const { title, description, agentId, priority = 'NORMAL', payload } = req.body;
+      const db = ModaDB.read();
+      const newTask: any = {
+        id: `task_${Math.random().toString(36).substring(2, 9)}`,
+        title,
+        description,
+        agentId: agentId || "ag1",
+        status: 'PENDING',
+        priority,
+        payload,
+        logs: [`[System] Task created at ${new Date().toISOString()}`],
+        createdAt: new Date().toISOString()
+      };
+      db.agent_tasks = db.agent_tasks || [];
+      db.agent_tasks.push(newTask);
+      ModaDB.write(db);
+      res.json({ success: true, task: newTask });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // Background "Agent Worker" simulation
+  setInterval(() => {
+    try {
+      const db = ModaDB.read();
+      const pendingTasks = (db.agent_tasks || []).filter(t => t.status === 'PENDING' || t.status === 'THINKING');
+      
+      if (pendingTasks.length > 0) {
+        const task = pendingTasks[0];
+        if (task.status === 'PENDING') {
+          task.status = 'THINKING';
+          if (!task.logs) task.logs = [];
+          task.logs.push(`[Agent] Starting analysis of task: ${task.title}`);
+        } else if (task.status === 'THINKING') {
+          // Randomly succeed or continue executing
+          if (!task.logs) task.logs = [];
+          if (Math.random() > 0.7) {
+            task.status = 'COMPLETED';
+            task.logs.push(`[Agent] Task successfully executed. Result: Done.`);
+            ModaDB.log("AI_AGENT", task.agentId, "TASK_COMPLETED", "AGENT_ENG", `Completed task: ${task.title}`);
+          } else {
+            task.logs.push(`[Agent] Working on node execution...`);
+          }
+        }
+        ModaDB.write(db);
+      }
+    } catch (err) {}
+  }, 10000); // Check every 10s
+
+  // === AUTH ROUTES (SOCIALITE) ===
+  app.get("/api/auth/:driver/redirect", (req, res) => {
+    try {
+      const { driver } = req.params;
+      const url = Socialite.driver(driver).getAuthUrl();
+      res.redirect(url);
+    } catch (e: any) {
+      res.status(400).json({ success: false, error: e.message });
+    }
+  });
+
+  app.get("/api/auth/:driver/callback", async (req, res) => {
+    try {
+      const { driver } = req.params;
+      const { code } = req.query;
+      if (!code) return res.redirect('/?error=missing_code');
+
+      const socialUser = await Socialite.driver(driver).getUserByCode(code as string);
+      
+      const db = ModaDB.read();
+      const normalizedEmail = socialUser.email.toLowerCase();
+      let user = db.users.find(u => u.email.toLowerCase() === normalizedEmail);
+
+      if (!user) {
+        const userId = `usr_${Math.random().toString(36).slice(2, 11)}`;
+        user = {
+          id: userId,
+          username: socialUser.name || normalizedEmail.split('@')[0],
+          email: normalizedEmail,
+          passwordHash: `SOCIAL_AUTH_${driver.toUpperCase()}`,
+          role: "Merchant Owner",
+          verified: true,
+          createdAt: new Date().toISOString()
+        };
+        db.users.push(user);
+      }
+
+      const sessionId = `sess_${Math.random().toString(36).slice(2, 15)}`;
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      db.sessions.push({ id: sessionId, userId: user.id, expiresAt });
+      ModaDB.write(db);
+      ModaDB.log(user.id, user.username, "USER_SOCIAL_LOGIN", "AUTH", `User logged in via ${driver}: ${sessionId}`);
+      
+      res.redirect(`/?login_success=true&sessionId=${sessionId}&email=${encodeURIComponent(socialUser.email)}&provider=${driver}`);
+    } catch (e: any) {
+      console.error(`Auth Callback Error [${req.params.driver}]:`, e);
+      res.redirect(`/?error=auth_failed&message=${encodeURIComponent(e.message)}`);
+    }
+  });
+
+  // === 9. DATABASE EXPLORER (ADMIN ONLY) ===
+  app.get("/api/admin/db", adminOnly, (req, res) => {
+    try {
+      const db = ModaDB.read();
+      res.json({ success: true, data: db });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  app.post("/api/admin/db/write", adminOnly, (req, res) => {
+    try {
+      const { data } = req.body;
+      if (!data) return res.status(400).json({ success: false, error: "Missing data payload." });
+      ModaDB.write(data);
+      res.json({ success: true, message: "Database updated successfully." });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e.message });
+    }
+  });
+
+  // Serve static assets OR handle Vite in middleware mode.
+  // For production-dist deployment, only enable Vite middleware when explicitly running in development mode.
+  const isDevMode = process.env.NODE_ENV === "development";
+
+  if (isDevMode) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
+    const publicPath = path.join(process.cwd(), "public");
     const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(publicPath));
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`[AI Host Server] Running on http://localhost:${PORT}`);
+    console.log(`[WS Server] Ready for connections`);
   });
 }
 

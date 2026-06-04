@@ -60,7 +60,7 @@ export interface TaskLog {
   sender: string;
   emoji: string;
   message: string;
-  type: 'info' | 'success' | 'alert';
+  type: 'info' | 'success' | 'alert' | 'warn' | 'error';
 }
 
 export interface ChatMessage {

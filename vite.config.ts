@@ -31,6 +31,13 @@ export default defineConfig(({ command, mode }) => {
               protocol: 'ws',
             }
           : false),
+      host: process.env.VITE_HOST || '0.0.0.0',
+      port: Number(process.env.VITE_PORT || 5173),
+      allowedHosts: [
+        'pay.modaui.com',
+        'localhost',
+        '127.0.0.1',
+      ],
       
       // 文件监听配置
       watch: process.env.DISABLE_HMR === 'true' ? null : {},

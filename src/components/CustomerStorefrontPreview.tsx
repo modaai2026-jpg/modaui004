@@ -1,25 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingBag, ShoppingCart, ArrowLeft, Check, Sparkles, Smartphone, 
-  Monitor, ChevronRight, Star, Clock, MapPin, Phone, Heart, Flame, Send, Search, MessageSquare
+  Monitor, ChevronRight, Star, Clock, MapPin, Phone, Heart, Flame, Send, Search, MessageSquare, Layout,
+  ShieldCheck, Loader2
 } from 'lucide-react';
-import { db, collection, doc, onSnapshot, setDoc } from '../services/firebase';
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-  image: string;
-  category: string;
-  desc: string;
-  sales?: number;
-  rating?: string;
-  specs?: {
-    sizes?: string[];
-    labels?: string;
-  };
-}
+import { db, collection, doc, onSnapshot, setDoc, updateDoc, increment } from '../services/firebase';
+import { INDUSTRY_TEMPLATES, Product } from './StorefrontTemplates';
+import BillingSubscriptionPanel from './BillingSubscriptionPanel';
+import { apiService } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const getIndustryDefaults = (indId: string) => {
   const defaults: Record<string, {
@@ -187,15 +176,107 @@ const getLocalValue = (key: string, fallback: string) => {
 };
 
 export default function CustomerStorefrontPreview() {
+  const { user } = useAuth();
   const localIndId = getLocalValue('preview_industry_id', 'catering');
+  const [tenantId, setTenantId] = useState(localStorage.getItem('modaui_current_tenant_id') || 'demo_tenant');
   const defaults = getIndustryDefaults(localIndId);
 
   const [industryId, setIndustryId] = useState(localIndId);
-  const [theme, setTheme] = useState<'retro' | 'dark' | 'classic'>(getLocalValue('preview_theme', defaults.theme) as any);
+  const [templateIndex, setTemplateIndex] = useState(0);
+  const [theme, setTheme] = useState<'retro' | 'dark' | 'classic' | 'royal' | 'indigo'>(getLocalValue('preview_theme', defaults.theme) as any);
   const [headline, setHeadline] = useState(getLocalValue('preview_headline', defaults.headline));
   const [company, setCompany] = useState(getLocalValue('preview_company', defaults.company));
   const [products, setProducts] = useState<Product[]>([]);
   const [customerCart, setCustomerCart] = useState<any[]>([]);
+  const [cartCalculations, setCartCalculations] = useState({
+    subtotal: 0,
+    discount: 0,
+    shipping: 0,
+    tax: 0,
+    total: 0
+  });
+
+  // --- PLATFORM SETTINGS SYNC ---
+  const [platformSettings, setPlatformSettings] = useState<any>(null);
+  
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'system', 'platform_settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        setPlatformSettings(docSnap.data());
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const getActivePaymentMethods = () => {
+    const allMethods = [
+      { id: 'stripe', label: '💳 Stripe (国际卡)', activeClass: 'bg-[#635BFF]/10 text-[#635BFF] border-[#635BFF]' },
+      { id: 'alipay', label: '📱 Alipay', activeClass: 'bg-[#1D9BF0]/10 text-[#1D9BF0] border-[#1D9BF0]' },
+      { id: 'wechat', label: '🟢 WeChat Pay', activeClass: 'bg-[#1EB23B]/10 text-[#1EB23B] border-[#1EB23B]' },
+      { id: 'paypal', label: '🅿️ PayPal', activeClass: 'bg-[#003087]/10 text-[#003087] border-[#003087]' }
+    ];
+    
+    if (!platformSettings?.payment) return allMethods;
+    
+    return allMethods.filter(m => platformSettings.payment[m.id]);
+  };
+
+  const refreshCart = async () => {
+    const userId = user?.uid || localStorage.getItem('guest_cart_id') || `guest_${Math.random().toString(36).slice(2, 11)}`;
+    if (!user && !localStorage.getItem('guest_cart_id')) {
+      localStorage.setItem('guest_cart_id', userId);
+    }
+    try {
+      const res = await apiService.cart.get(userId);
+      if (res.success) {
+        setCustomerCart(res.items || []);
+        setCartCalculations(res.calculations);
+      }
+    } catch (e) {
+      console.warn("Refresh cart failed:", e);
+    }
+  };
+
+  useEffect(() => {
+    refreshCart();
+  }, [user]);
+  
+  // Real Sync with Firestore Merchant Store Config
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const unsub = onSnapshot(doc(db, 'merchants', tenantId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const store = data.storeConfig || {};
+        if (store.theme) setTheme(store.theme);
+        if (store.templateIndex !== undefined) setTemplateIndex(store.templateIndex);
+        if (store.headline) setHeadline(store.headline);
+        if (data.merchantName) setCompany(data.merchantName);
+      }
+    });
+
+    return () => unsub();
+  }, [tenantId]);
+
+  // Real Sync with Firestore Products
+  useEffect(() => {
+    if (!tenantId || !industryId) return;
+
+    const unsub = onSnapshot(collection(db, 'tenants', tenantId, 'industries', industryId, 'products'), (snapshot) => {
+      const list: Product[] = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() } as Product);
+      });
+      if (list.length > 0) {
+        setProducts(list);
+      } else {
+        setProducts(defaults.products);
+      }
+    });
+
+    return () => unsub();
+  }, [tenantId, industryId, defaults.products]);
   const getInitialTabFromUrl = () => {
     if (typeof window === 'undefined') return 'home';
     const path = window.location.pathname;
@@ -235,7 +316,6 @@ export default function CustomerStorefrontPreview() {
     };
   }, [activeTab]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [couponApplied, setCouponApplied] = useState(true);
   const [selectedSpecs, setSelectedSpecs] = useState<string>('');
   const [orderSubmitted, setOrderSubmitted] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState('朝阳区望京SOHO 2单元1102');
@@ -429,20 +509,62 @@ export default function CustomerStorefrontPreview() {
   );
 
   // Add to cart helper
-  const addToCart = (product: Product, selectedOptions?: string) => {
-    const sizeStr = selectedOptions || getSpecsForProduct(product, industryId)[0] || '标准规格';
-    const existing = customerCart.find(it => it.id === product.id && it.specs === sizeStr);
-    
-    if (existing) {
-      setCustomerCart(p => p.map(it => it.id === product.id && it.specs === sizeStr ? { ...it, quantity: it.quantity + 1 } : it));
-    } else {
-      setCustomerCart(p => [...p, { ...product, quantity: 1, specs: sizeStr }]);
+  const addToCart = async (product: Product, selectedOptions?: string) => {
+    const userId = user?.uid || localStorage.getItem('guest_cart_id') || 'guest_user';
+    try {
+      await apiService.cart.add(userId, product.id, 1);
+      showToast(`已将 ${product.name} 加入购物车`, 'success');
+      refreshCart();
+    } catch (e) {
+      showToast("加入购物车失败", 'error');
+    }
+  };
+
+  const updateCartQuantity = async (productId: string, quantity: number) => {
+    const userId = user?.uid || localStorage.getItem('guest_cart_id') || 'guest_user';
+    try {
+      await apiService.cart.updateQuantity(userId, productId, quantity);
+      refreshCart();
+    } catch (e) {
+      showToast("更新数量失败", 'error');
+    }
+  };
+
+  const clearCart = async () => {
+    const userId = user?.uid || localStorage.getItem('guest_cart_id') || 'guest_user';
+    try {
+      await apiService.cart.clear(userId);
+      refreshCart();
+      showToast("购物车已清空", 'success');
+    } catch (e) {
+      showToast("清空购物车失败", 'error');
+    }
+  };
+
+  const applyCoupon = async (couponCode: string) => {
+    const userId = user?.uid || localStorage.getItem('guest_cart_id') || 'guest_user';
+    try {
+      await apiService.cart.applyCoupon(userId, couponCode);
+      refreshCart();
+      showToast("优惠券已应用", 'success');
+    } catch (e) {
+      showToast("应用优惠券失败", 'error');
+    }
+  };
+
+  const removeFromCart = async (productId: string) => {
+    const userId = user?.uid || localStorage.getItem('guest_cart_id') || 'guest_user';
+    try {
+      await apiService.cart.remove(userId, productId);
+      refreshCart();
+      showToast("商品已从购物车移除", 'info');
+    } catch (e) {
+      showToast("移除失败", 'error');
     }
   };
 
   const getCartTotal = () => {
-    const sub = customerCart.reduce((acc, it) => acc + (it.price * it.quantity), 0);
-    return Math.max(0, sub - (couponApplied ? 12 : 0));
+    return cartCalculations.total;
   };
 
   // Chat window initialization with industry-specific digital assistant welcome message
@@ -578,6 +700,22 @@ export default function CustomerStorefrontPreview() {
         </div>
 
         <div className="flex items-center space-x-3 shrink-0">
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-1 mr-4">
+            <Layout className="w-3.5 h-3.5 text-zinc-500 mx-2" />
+            {(INDUSTRY_TEMPLATES[industryId]?.templates || []).map((t, idx) => (
+              <button
+                key={t.id}
+                onClick={() => setTemplateIndex(idx)}
+                className={`px-3 py-1.5 rounded-md text-[10px] font-bold transition-all ${
+                  templateIndex === idx 
+                    ? 'bg-emerald-500 text-white shadow-lg' 
+                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                }`}
+              >
+                {t.name}
+              </button>
+            ))}
+          </div>
           <button 
             onClick={handleBackToDashboard}
             className="inline-flex items-center space-x-1.5 text-xs text-zinc-300 hover:text-white bg-zinc-900 border border-zinc-800 px-3.5 py-2 rounded-lg cursor-pointer hover:bg-zinc-850 duration-150 transition-all font-bold"
@@ -602,10 +740,10 @@ export default function CustomerStorefrontPreview() {
           </div>
 
           {/* Simulated Browser Workspace Container */}
-          <div className="w-full bg-[#111115] border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+          <div className="w-full bg-[#111115] border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col h-[600px]">
             
             {/* Elegant Browser Top Chrome Address Bar */}
-            <div className="bg-zinc-950 px-4 py-2 border-b border-zinc-850 flex items-center space-x-2">
+            <div className="bg-zinc-950 px-4 py-2 border-b border-zinc-850 flex items-center space-x-2 shrink-0">
               <div className="flex space-x-1.5 shrink-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
                 <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
@@ -615,149 +753,35 @@ export default function CustomerStorefrontPreview() {
                 <span className="text-sky-500 select-none">🔒 https://</span>
                 <span className="text-zinc-200 select-all">{company.toLowerCase().replace(/\s+/g, '-') || 'shop'}.ai-shop.co</span>
               </div>
-              <span className="text-[10px] font-mono text-sky-400 shrink-0 select-none px-1.5 py-0.5 bg-sky-950/40 rounded border border-emerald-900">100% 极速加载</span>
+              <span className="text-[10px] font-mono text-sky-400 shrink-0 select-none px-1.5 py-0.5 bg-sky-950/40 rounded border border-emerald-900">PREMIUM TEMPLATE</span>
             </div>
 
-            {/* Generated Shop Website Body */}
-            <div className={`p-6 min-h-[520px] max-h-[580px] overflow-y-auto custom-scrollbar flex flex-col ${currentStyle.bg} ${currentStyle.text}`}>
-              
-              {/* Web Header/Navigation bar */}
-              <nav className="flex justify-between items-center pb-5 border-b border-zinc-200/10">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xl">🏪</span>
-                  <span className="font-extrabold text-sm tracking-tight">{company}</span>
-                </div>
-                <div className="flex items-center space-x-6 text-xs font-medium">
-                  <span className="cursor-pointer hover:opacity-75">主页</span>
-                  <span className="cursor-pointer hover:opacity-75">精选菜单</span>
-                  <span className="cursor-pointer hover:opacity-75">关于品牌</span>
-                  <span className="cursor-pointer hover:opacity-75">联系我们</span>
-                </div>
-                <div className="flex items-center space-x-2 shrink-0">
-                  <div className="relative cursor-pointer">
-                    <ShoppingBag className="w-4 h-4" />
-                    {customerCart.length > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[8px] font-bold">
-                        {customerCart.reduce((s, it) => s + it.quantity, 0)}
-                      </span>
-                    )}
+            {/* Dynamic Template Rendering Area */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar bg-white">
+              {(() => {
+                const industryConfig = INDUSTRY_TEMPLATES[industryId];
+                const TemplateComponent = industryConfig?.templates[templateIndex]?.component || industryConfig?.templates[0]?.component;
+                
+                if (TemplateComponent) {
+                  return (
+                    <TemplateComponent 
+                      company={company}
+                      headline={headline}
+                      products={products}
+                      onAddToCart={(p) => {
+                        addToCart(p);
+                        showToast(`已将【${p.name}】加车！`, 'success');
+                      }}
+                      onProductClick={(p) => setSelectedProduct(p)}
+                    />
+                  );
+                }
+                return (
+                  <div className="flex items-center justify-center h-full text-zinc-400 font-mono text-sm">
+                    Select a template to preview
                   </div>
-                </div>
-              </nav>
-
-              {/* Web Hero Section */}
-              <div className="py-8 text-center space-y-4">
-                <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-800 border border-emerald-200 select-none">
-                  ⚡ 专属官网
-                </div>
-                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight max-w-2xl mx-auto leading-tight">
-                  {headline}
-                </h1>
-                <p className="text-xs max-w-md mx-auto opacity-75">
-                  为您精选优质工艺。
-                </p>
-                <div className="flex items-center justify-center space-x-3 pt-2">
-                  <button onClick={() => {
-                    showToast('【官网模拟下单】：已成功定位产品系列，您可以通过右侧的 Mobile App 端进行真实交互订购！', 'info');
-                  }} className={`px-5 py-2 rounded-lg font-bold text-xs shadow-md transition-all ${currentStyle.primaryBtn}`}>
-                    立即阅览点餐 / Experience
-                  </button>
-                  <button className="px-5 py-2 rounded-lg border border-zinc-300 text-xs font-bold bg-transparent">
-                    领取限定红包 🎟️
-                  </button>
-                </div>
-
-                {/* Interactive SPU search bar on PC Storefront */}
-                <div className="max-w-md mx-auto relative mt-5">
-                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
-                    <Search className="w-3.5 h-3.5" />
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="请输入商品名称、描述或分类进行实时 SPU 搜索过滤..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 bg-black/10 text-xs border border-zinc-300/15 focus:border-[#1D9BF0] focus:outline-none focus:ring-1 focus:ring-[#1D9BF0] rounded-xl duration-150 transition-colors placeholder:text-zinc-500 font-sans"
-                  />
-                  {searchQuery && (
-                    <button 
-                      onClick={() => setSearchQuery('')}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-zinc-400 hover:text-white font-bold"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Product Visual Showcase Grid */}
-              <div className="mt-4 space-y-4">
-                <div className="flex justify-between items-center border-b border-zinc-200/5 pb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider opacity-90 text-left">🌟 主推招牌系列 ({filteredProducts.length}款)</h3>
-                  {searchQuery && <span className="text-[10px] text-sky-400">正在按关键词 “{searchQuery}” 过滤</span>}
-                </div>
-
-                {filteredProducts.length === 0 ? (
-                  <div className="py-12 text-center text-zinc-500 text-xs font-mono">
-                    ⚠️ 没有找到符合 “{searchQuery}” 搜索词的商品，建议换一个词再试试。
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {filteredProducts.map((p) => (
-                      <div 
-                        key={p.id} 
-                        className={`p-3 rounded-xl border flex flex-col justify-between hover:scale-101 duration-150 cursor-pointer ${currentStyle.accentBg} ${currentStyle.accentBorder}`}
-                      >
-                        <div className="relative">
-                          <span className="absolute top-0 left-0 bg-red-500 text-white font-bold text-[8px] px-1 py-0.5 rounded shadow">REC</span>
-                          <div className="text-center py-4 text-4xl filter drop-shadow select-none">{p.image}</div>
-                        </div>
-                        <div className="space-y-1 text-left mt-2">
-                          <h4 className="text-xs font-bold leading-tight truncate">{p.name}</h4>
-                          <p className="text-[10px] opacity-60 leading-normal line-clamp-2 min-h-[30px]">{p.desc}</p>
-                          <div className="flex items-center justify-between pt-1.5">
-                            <span className="text-xs font-black font-mono">¥{p.price}</span>
-                            <button 
-                              type="button"
-                              onClick={() => {
-                                addToCart(p);
-                                showToast(`已将【${p.name}】加车！`, 'success');
-                              }}
-                              className={`px-2 py-1 rounded text-[9px] font-bold ${currentStyle.primaryBtn}`}
-                            >
-                              加购
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Custom Promo Footer Cards */}
-              <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
-                <div className={`p-4 rounded-xl border ${currentStyle.accentBg} ${currentStyle.accentBorder}`}>
-                  <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800">
-                    <Clock className="w-4 h-4 shrink-0" />
-                    <span>今日营业时段 (Opening Hours)</span>
-                  </div>
-                  <p className="text-[11px] mt-1.5 opacity-75">星期一至星期日 09:00 - 22:30，AI 店长与专业员工 24 小时全自动处理线上订单结款。</p>
-                </div>
-                <div className={`p-4 rounded-xl border ${currentStyle.accentBg} ${currentStyle.accentBorder}`}>
-                  <div className="flex items-center space-x-2 text-xs font-bold text-emerald-800">
-                    <MapPin className="w-4 h-4 shrink-0" />
-                    <span>智能店址指引 (Delivery Area)</span>
-                  </div>
-                  <p className="text-[11px] mt-1.5 opacity-75">本地实体双轨网关，支持全周边界外卖极速自动派单配送与店内一键免排队扫码结算。</p>
-                </div>
-              </div>
-
-              {/* Quick info feedback copyright */}
-              <div className="mt-12 pt-4 border-t border-zinc-200/5 text-center text-[10px] opacity-40">
-                © 2026 {company}. Powered by Antigravity AI Engine. All rights reserved.
-              </div>
-
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -925,7 +949,7 @@ export default function CustomerStorefrontPreview() {
                       <div className="border-b pb-1 flex justify-between items-center border-zinc-200/10">
                         <span className="font-black text-[10px]">🛒 您的选购清单 ({customerCart.length}款)</span>
                         {customerCart.length > 0 && (
-                          <button onClick={() => setCustomerCart([])} className="text-[8px] text-zinc-400 underline">清空</button>
+                          <button onClick={clearCart} className="text-[8px] text-zinc-400 underline">清空</button>
                         )}
                       </div>
 
@@ -944,18 +968,17 @@ export default function CustomerStorefrontPreview() {
                                   <span className="text-lg">{item.image}</span>
                                   <div className="min-w-0 text-left">
                                     <h5 className="font-bold text-[8.5px] truncate">{item.name}</h5>
-                                    <p className="text-[7px] text-emerald-800">{item.specs}</p>
+                                    <p className="text-[7px] text-emerald-800">{item.specs || '标准规格'}</p>
                                     <span className="text-[8.5px] font-extrabold text-amber-800">¥{item.price}</span>
                                   </div>
                                 </div>
                                 <div className="flex items-center space-x-1 shrink-0 scale-90">
-                                  <button onClick={() => {
-                                    setCustomerCart(p => p.map((it, i) => i === idx ? { ...it, quantity: Math.max(1, it.quantity - 1) } : it));
-                                  }} className="bg-zinc-200 dark:bg-zinc-800 text-zinc-750 w-4 h-4 rounded text-[9.5px] font-bold">-</button>
+                                  <button onClick={(e) => { e.stopPropagation(); removeFromCart(item.productId); }} className="text-zinc-400 hover:text-red-500 mr-1.5 p-1">
+                                    <span className="text-[10px]">✕</span>
+                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); updateCartQuantity(item.productId, item.quantity - 1); }} className="bg-zinc-200 dark:bg-zinc-800 text-zinc-750 w-4 h-4 rounded text-[9.5px] font-bold">-</button>
                                   <span className="text-[9px] font-black w-2 text-center">{item.quantity}</span>
-                                  <button onClick={() => {
-                                    setCustomerCart(p => p.map((it, i) => i === idx ? { ...it, quantity: it.quantity + 1 } : it));
-                                  }} className="bg-[#1D9BF0] text-white w-4 h-4 rounded text-[9.5px] font-bold">+</button>
+                                  <button onClick={(e) => { e.stopPropagation(); updateCartQuantity(item.productId, item.quantity + 1); }} className="bg-[#1D9BF0] text-white w-4 h-4 rounded text-[9.5px] font-bold">+</button>
                                 </div>
                               </div>
                             ))}
@@ -976,12 +999,29 @@ export default function CustomerStorefrontPreview() {
 
                             <div className="p-1 px-1.5 rounded text-[8px] bg-red-500/5 border border-red-500/10 flex justify-between items-center">
                               <span className="text-amber-800 dark:text-amber-400 font-bold">🎟️ 红包扣减</span>
-                              <button onClick={() => setCouponApplied(!couponApplied)} className="underline cursor-pointer font-bold">{couponApplied ? '-¥12' : '不可用'}</button>
+                              <button onClick={() => applyCoupon(cartCalculations.discount > 0 ? '' : 'VIP88')} className="underline cursor-pointer font-bold">
+                                {cartCalculations.discount > 0 ? `-¥${cartCalculations.discount.toFixed(2)}` : '输入券码'}
+                              </button>
                             </div>
 
-                            <div className="flex justify-between items-center text-[9px] font-black pt-1">
+                            <div className="space-y-0.5 text-[8px] text-zinc-500 font-mono border-t border-zinc-100/10 pt-1.5 mt-1.5">
+                              <div className="flex justify-between">
+                                <span>商品小计:</span>
+                                <span>¥{cartCalculations.subtotal.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>预计税费 (1%):</span>
+                                <span>¥{cartCalculations.tax.toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>基础运费:</span>
+                                <span>{cartCalculations.shipping > 0 ? `¥${cartCalculations.shipping.toFixed(2)}` : '免运费'}</span>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center text-[9px] font-black pt-1 border-t border-zinc-900/10">
                               <span>总付结款金额：</span>
-                              <span className="text-amber-800 text-[10.5px]">¥{getCartTotal().toFixed(2)}</span>
+                              <span className="text-amber-800 text-[10.5px]">¥{cartCalculations.total.toFixed(2)}</span>
                             </div>
 
                              <button 
@@ -1040,12 +1080,7 @@ export default function CustomerStorefrontPreview() {
 
                       {/* Payment Method Selector */}
                       <div className="grid grid-cols-2 gap-2 text-center">
-                        {[
-                          { id: 'stripe', label: '💳 Stripe (国际卡)', activeClass: 'bg-[#635BFF]/10 text-[#635BFF] border-[#635BFF]' },
-                          { id: 'alipay', label: '📱 Alipay', activeClass: 'bg-[#1D9BF0]/10 text-[#1D9BF0] border-[#1D9BF0]' },
-                          { id: 'wechat', label: '🟢 WeChat Pay', activeClass: 'bg-[#1EB23B]/10 text-[#1EB23B] border-[#1EB23B]' },
-                          { id: 'paypal', label: '🅿️ PayPal', activeClass: 'bg-[#003087]/10 text-[#003087] border-[#003087]' }
-                        ].map((pay) => (
+                        {getActivePaymentMethods().map((pay) => (
                           <button
                             key={pay.id}
                             type="button"
@@ -1156,12 +1191,12 @@ export default function CustomerStorefrontPreview() {
                       <div className="space-y-1 font-mono text-[8.5px] border-t border-dashed border-zinc-900 pt-2 text-zinc-400 leading-normal">
                         <div className="flex justify-between">
                           <span>小计 (Subtotal):</span>
-                          <span>¥{(getCartTotal() + (couponApplied ? 12 : 0)).toFixed(2)}</span>
+                          <span>¥{(cartCalculations.subtotal + cartCalculations.tax + cartCalculations.shipping).toFixed(2)}</span>
                         </div>
-                        {couponApplied && (
+                        {cartCalculations.discount > 0 && (
                           <div className="flex justify-between text-emerald-400">
                             <span>红包抵扣 (Coupon):</span>
-                            <span>-¥12.00</span>
+                            <span>-¥{cartCalculations.discount.toFixed(2)}</span>
                           </div>
                         )}
                         <div className="flex justify-between font-black text-white text-[9.5px] pt-1 border-t border-zinc-900/40">
@@ -1178,200 +1213,63 @@ export default function CustomerStorefrontPreview() {
                         setIsPaying(true);
                         const localTenantId = localStorage.getItem('preview_tenant_id') || 'default_tenant';
                         const localIndustryId = localStorage.getItem('preview_industry_id') || 'catering';
-                        const newOrderId = `ORD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
-                        const desc = customerCart.map(it => `${it.name} x ${it.quantity}`).join(', ');
                         const total = getCartTotal();
 
                         try {
-                          if (selectedPayMethod === 'stripe') {
-                            showToast('💳 Stripe 金流支付安全认证通道握手中...', 'info');
-                            const orderToSave = {
-                              id: newOrderId,
-                              time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                              location: orderType === 'takeout' ? deliveryAddress : 'B08桌',
-                              desc,
-                              price: total,
-                              status: 'paid',
-                              type: orderType,
-                              customerName: '联合智点买家',
-                              phone: '13910245678',
-                              tracking: '顺丰自动配货中'
-                            };
-                            const orderDocRef = doc(db, 'tenants', localTenantId, 'industries', localIndustryId, 'orders', newOrderId);
-                            await setDoc(orderDocRef, orderToSave);
-                            const billingLogId = `SAAS-BILL-${Date.now()}`;
-                            const billingLogRef = doc(db, 'tenants', localTenantId, 'billing_logs', billingLogId);
-                            await setDoc(billingLogRef, {
-                              id: billingLogId,
-                              orderId: newOrderId,
-                              amount: total,
-                              clientName: '联合智点买家',
-                              time: new Date().toISOString().substring(0, 19).replace('T', ' '),
-                              method: 'Stripe (Visa/Master)',
-                              type: 'order_payment',
-                              status: 'settled',
-                              tokenConsumed: Math.floor(total * 8 + 15),
-                              description: `完成店面消费订单付款扣减，商品: ${desc}`
-                            });
-                            showToast('🎉 Stripe 安全结算收银成功！您的代运营团队已极速跟进派单出货！', 'success');
-                            setOrderSubmitted(true);
-                            setCustomerCart([]);
-                            setShowPaymentModal(false);
-                            setActiveTab('success');
-                          } else if (selectedPayMethod === 'alipay') {
-                            showToast('📱 Alipay 二维码生成中，请准备扫码支付...', 'info');
-                            const orderToSave = {
-                              id: newOrderId,
-                              time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                              location: orderType === 'takeout' ? deliveryAddress : 'B08桌',
-                              desc,
-                              price: total,
-                              status: 'paid',
-                              type: orderType,
-                              customerName: '联合智点买家',
-                              phone: '13910245678',
-                              tracking: '顺丰自动配货中'
-                            };
-                            const orderDocRef = doc(db, 'tenants', localTenantId, 'industries', localIndustryId, 'orders', newOrderId);
-                            await setDoc(orderDocRef, orderToSave);
-                            const billingLogId = `SAAS-BILL-${Date.now()}`;
-                            const billingLogRef = doc(db, 'tenants', localTenantId, 'billing_logs', billingLogId);
-                            await setDoc(billingLogRef, {
-                              id: billingLogId,
-                              orderId: newOrderId,
-                              amount: total,
-                              clientName: '联合智点买家',
-                              time: new Date().toISOString().substring(0, 19).replace('T', ' '),
-                              method: 'Alipay',
-                              type: 'order_payment',
-                              status: 'settled',
-                              tokenConsumed: Math.floor(total * 8 + 15),
-                              description: `完成店面消费订单付款扣减，商品: ${desc}`
-                            });
-                            showToast('✅ Alipay 支付已确认，系统已完成订单发起。', 'success');
-                            setOrderSubmitted(true);
-                            setCustomerCart([]);
-                            setShowPaymentModal(false);
-                            setActiveTab('success');
-                          } else if (selectedPayMethod === 'wechat') {
-                            showToast('⌛ 微信扫码支付请求已发送，二维码生成中...', 'info');
-                            const response = await fetch('/api/payments/wechat/checkout', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ orderId: newOrderId, amount: total })
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                              setWechatQrUrl(data.qrCode || '');
-                              setCurrentPaymentOrderId(newOrderId);
-                              setCurrentPaymentStatus('pending');
-                              await fetch('/api/orders', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  orderId: newOrderId,
-                                  userId: localTenantId,
-                                  storeId: localIndustryId,
-                                  merchantId: localTenantId,
-                                  items: customerCart.map((it) => ({ productId: it.id, productName: it.name, price: it.price, quantity: it.quantity })),
-                                  totalPrice: total,
-                                  orderType,
-                                  deliveryAddress
-                                })
-                              });
-                              const orderToSave = {
-                                id: newOrderId,
-                                time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                location: orderType === 'takeout' ? deliveryAddress : 'B08桌',
-                                desc,
-                                price: total,
-                                status: 'pending',
-                                type: orderType,
-                                customerName: '联合智点买家',
-                                phone: '13910245678',
-                                tracking: '等待微信支付完成'
-                              };
-                              const orderDocRef = doc(db, 'tenants', localTenantId, 'industries', localIndustryId, 'orders', newOrderId);
-                              await setDoc(orderDocRef, orderToSave);
-                              showToast('✅ 已生成微信支付二维码，请扫码完成支付。', 'success');
-                            } else {
-                              throw new Error(data.error || '微信支付二维码生成失败');
-                            }
-                          } else if (selectedPayMethod === 'paypal') {
-                            showToast('⌛ PayPal 结账跳转准备中...', 'info');
-                            const response = await fetch('/api/payments/paypal/checkout', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                orderId: newOrderId,
-                                amount: total,
-                                items: customerCart.map((it) => ({ name: it.name, quantity: it.quantity, price: it.price }))
-                              })
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                              setPaypalApprovalLink(data.approvalLink || '');
-                              setCurrentPaymentOrderId(newOrderId);
-                              setCurrentPaymentStatus('pending');
-                              await fetch('/api/orders', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  orderId: newOrderId,
-                                  userId: localTenantId,
-                                  storeId: localIndustryId,
-                                  merchantId: localTenantId,
-                                  items: customerCart.map((it) => ({ productId: it.id, productName: it.name, price: it.price, quantity: it.quantity })),
-                                  totalPrice: total,
-                                  orderType,
-                                  deliveryAddress
-                                })
-                              });
-                              const orderToSave = {
-                                id: newOrderId,
-                                time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-                                location: orderType === 'takeout' ? deliveryAddress : 'B08桌',
-                                desc,
-                                price: total,
-                                status: 'pending',
-                                type: orderType,
-                                customerName: '联合智点买家',
-                                phone: '13910245678',
-                                tracking: '等待 PayPal 支付完成'
-                              };
-                              const orderDocRef = doc(db, 'tenants', localTenantId, 'industries', localIndustryId, 'orders', newOrderId);
-                              await setDoc(orderDocRef, orderToSave);
-                              if (data.approvalLink) {
-                                window.open(data.approvalLink, '_blank');
-                              }
-                              showToast('✅ PayPal 结账页面已打开，请完成支付。', 'success');
-                            } else {
-                              throw new Error(data.error || 'PayPal checkout failed');
-                            }
-                          }
-                          setCustomerCart(selectedPayMethod === 'stripe' || selectedPayMethod === 'alipay' ? [] : customerCart);
-                          setShowPaymentModal(selectedPayMethod === 'stripe' || selectedPayMethod === 'alipay' ? false : true);
-                          setActiveTab(selectedPayMethod === 'stripe' || selectedPayMethod === 'alipay' ? 'success' : 'cart');
-                          setIsPaying(false);
+                          // Call Backend Order API (Task 07 Remediation)
+                          const orderPayload = {
+                            userId: user?.uid || localStorage.getItem('guest_cart_id') || 'guest_user',
+                            tenantId: localTenantId,
+                            industryId: localIndustryId,
+                            items: customerCart.map(it => ({
+                              productId: it.productId, 
+                              name: it.name,
+                              price: it.price,
+                              quantity: it.quantity
+                            })),
+                            totalPrice: total,
+                            orderType,
+                            deliveryAddress,
+                            status: 'paid'
+                          };
+
+                          const orderRes = await fetch('/api/orders', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(orderPayload)
+                          });
+                          const orderData = await orderRes.json();
+
+                          if (!orderData.success) throw new Error(orderData.error);
+
+                          showToast('✅ 支付已确认！正在极速配货...', 'success');
+                          setOrderSubmitted(true);
+                          await clearCart();
+                          setShowPaymentModal(false);
+                          setActiveTab('success');
                         } catch (err: any) {
-                          console.error('Payment secure backend sync failed:', err);
-                          showToast('支付结算通道出现未决异常: ' + err.message, 'error');
+                          console.error("Order process error:", err);
+                          showToast(`下单失败: ${err.message}`, 'error');
+                        } finally {
                           setIsPaying(false);
                         }
                       }}
-                      className={`w-full py-2 rounded-lg font-bold text-xs shadow-md uppercase transition-all text-center flex items-center justify-center space-x-1 ${
-                        isPaying
-                          ? 'bg-[#635BFF]/30 text-[#635BFF] cursor-not-allowed'
-                          : 'bg-[#635BFF] hover:bg-[#4F46E5] text-white cursor-pointer hover:scale-[1.01]'
+                      className={`w-full py-3.5 rounded-xl font-black text-[10px] shadow-lg transition-all flex items-center justify-center space-x-2 ${
+                        isPaying 
+                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+                          : 'bg-[#1D9BF0] hover:bg-[#38BDF8] active:scale-[0.98] text-white'
                       }`}
                     >
                       {isPaying ? (
                         <>
-                          <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin mr-1.5" />
-                          <span>正在解算扣款...</span>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>正在安全结算...</span>
                         </>
                       ) : (
-                        <span>确认安全代付 ¥{getCartTotal().toFixed(2)}</span>
+                        <>
+                          <ShieldCheck className="w-4 h-4" />
+                          <span>确认支付 ¥{getCartTotal().toFixed(2)} 并完成订单</span>
+                        </>
                       )}
                     </button>
                   </div>
@@ -1402,6 +1300,10 @@ export default function CustomerStorefrontPreview() {
 
               </div>
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-800 bg-[#09090B] p-4 shadow-2xl">
+            <BillingSubscriptionPanel tenantId={user?.uid || 'preview_tenant'} />
           </div>
         </div>
 

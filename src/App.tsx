@@ -1,10 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Building2, ArrowRight, ArrowLeft, ShieldCheck, Mail, CheckCircle, 
-  HelpCircle, Settings, Laptop, BarChart2, Network,
-  ChevronLeft, ChevronRight, RotateCw, Lock,
-  ChevronDown, ChevronUp, Layers, Eye, Cpu, Compass, Radio 
+  ArrowRight, ArrowLeft, Network, Bell, Activity, Eye, Settings as SettingsIcon
 } from 'lucide-react';
 import { FlowStep, IndustryData, OperatingStrategy } from './types';
 import { INDUSTRIES, OPERATING_STRATEGIES } from './data';
@@ -14,17 +11,77 @@ import OnboardingScreen from './components/OnboardingScreen';
 import MerchantDashboard from './components/MerchantDashboard';
 import CustomerStorefrontPreview from './components/CustomerStorefrontPreview';
 import UnifiedArchitectureBridge from './components/UnifiedArchitectureBridge';
+import PlatformAdminView from './components/PlatformAdminView';
 import AITeamsView from './components/AITeamsView';
 import AIRuntimeView from './components/AIRuntimeView';
 import KnowledgeBaseView from './components/KnowledgeBaseView';
-import PlatformAdminView from './components/PlatformAdminView';
-import { auth, db, doc, getDoc } from './services/firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import AdminGate from './components/AdminGate';
+import NotificationCenter from './components/NotificationCenter';
+import AuditLogViewer from './components/AuditLogViewer';
+import MonitoringDashboard from './components/MonitoringDashboard';
+import PlatformSettingsCenter from './components/PlatformSettingsCenter';
+import { db } from './services/firebase';
+import { ChatAssistant, ThemeProvider } from './lib/ui';
+import { usePermission, UserRole } from './hooks/usePermission';
+import { useAuth } from './context/AuthContext';
+import { notificationService } from './services/notification.service';
+import { auditLogService } from './services/audit.service';
+import { monitoringService } from './services/monitoring.service';
+import { configRegistry } from './services/config-registry.service';
 
 export default function App() {
-  // Check if we are in preview mode
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
+  const { user, role, logout } = useAuth();
+
+  // 新增系统管理面板状态
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [isAuditLogViewerOpen, setIsAuditLogViewerOpen] = useState(false);
+  const [isMonitoringOpen, setIsMonitoringOpen] = useState(false);
+  const [isSettingsCenterOpen, setIsSettingsCenterOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+  // Check if we are in preview mode - must be after all hooks
   const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const isPreviewMode = urlParams?.get('preview') === 'true';
+
+  // 初始化系统服务
+  useEffect(() => {
+    // 初始化通知服务
+    const unsubscribeNotifications = notificationService.subscribe('all', () => {
+      setUnreadNotifications(notificationService.getUnread().length);
+    });
+
+    // 初始化审计日志
+    auditLogService.initialize(db);
+
+    // 初始化监控
+    const unsubscribeMonitoring = monitoringService.subscribe(() => {
+      // 监控服务已订阅
+    });
+
+    // 初始化配置注册表
+    configRegistry.subscribe((key, oldValue, newValue) => {
+      console.log(`Config updated: ${key}`, { oldValue, newValue });
+      // 可选：发送通知
+      notificationService.notify(`配置已更新`, `${key} 已从 ${oldValue} 更改为 ${newValue}`, {
+        level: 'info',
+        category: 'config',
+        details: { key, oldValue, newValue }
+      });
+    });
+
+    return () => {
+      unsubscribeNotifications();
+      unsubscribeMonitoring();
+    };
+  }, []);
 
   if (isPreviewMode) {
     return <CustomerStorefrontPreview />;
@@ -53,7 +110,8 @@ export default function App() {
     if (matches) return matches[0] as FlowStep;
 
     // Check for sub-routes
-    if (path.startsWith('/adminx') || path.startsWith('/admin/infra')) {
+    // 兼容多种路径进入总后台：/adminx 或 /#/adminx
+    if (path.startsWith('/adminx') || path.startsWith('/admin/infra') || (typeof window !== 'undefined' && window.location.hash === '#/adminx')) {
       return 'PLATFORM_ADMIN';
     }
     if (path.startsWith('/admin/rosters')) {
@@ -113,8 +171,6 @@ export default function App() {
   const [customCompanyName, setCustomCompanyName] = useState('');
   const [selectedStrategy, setSelectedStrategy] = useState<OperatingStrategy>(OPERATING_STRATEGIES[0]);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
-  const [userRole, setUserRole] = useState<'founder' | 'admin' | 'manager' | 'staff' | 'customer'>('founder');
   const [isBridgeOpen, setIsBridgeOpen] = useState(false);
   const [isViewDeckOpen, setIsViewDeckOpen] = useState(true);
   const [adminMode, setAdminMode] = useState<'platform' | 'system'>(
@@ -122,11 +178,10 @@ export default function App() {
   );
 
   const handleUpdateRole = async (newRole: 'founder' | 'admin' | 'manager' | 'staff' | 'customer') => {
-    setUserRole(newRole);
-    if (auth.currentUser) {
+    if (user) {
       try {
         const { updateDoc, doc } = await import('./services/firebase');
-        const userDocRef = doc(db, 'users', auth.currentUser.uid);
+        const userDocRef = doc(db, 'users', user.uid);
         await updateDoc(userDocRef, { role: newRole });
       } catch (e) {
         console.error("Error updating user role in Database:", e);
@@ -134,34 +189,29 @@ export default function App() {
     }
   };
 
-  // Synchronize dynamic Firebase Auth user and fetch actual DB role profile
-  React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserEmail(user.email || 'founder@gmail.com');
-        try {
-          const userDocRef = doc(db, 'users', user.uid);
-          const snap = await getDoc(userDocRef);
-          if (snap.exists()) {
-            const roleVal = snap.data().role;
-            if (roleVal) {
-              setUserRole(roleVal);
-            } else {
-              setUserRole('founder');
-            }
-          } else {
-            setUserRole('founder');
-          }
-        } catch (e) {
-          console.error("Error reading role profile:", e);
-          setUserRole('founder');
-        }
-      } else {
-        setUserEmail('');
-        setUserRole('customer'); // default base role
+  // Global keyboard shortcuts for admin
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        setStep('PLATFORM_ADMIN');
       }
-    });
-    return () => unsubscribe();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Synchronize dynamic Firebase Auth user and fetch actual DB role profile
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash === '#/adminx' || window.location.hash.startsWith('#/adminx')) {
+        setStep('PLATFORM_ADMIN');
+      }
+    };
+    // 初始检查
+    handleHashChange();
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   // Synchronize path when step state changes
@@ -203,8 +253,16 @@ export default function App() {
     };
   }, []);
 
+  const { hasPermission } = usePermission(role as UserRole);
+
   const handleNavigate = (action: any) => {
     if (action.step) {
+      // Basic Permission Guard
+      if (action.step === 'PLATFORM_ADMIN' && !hasPermission('all')) {
+        console.error("Access Denied: Missing Platform Admin permission");
+        return;
+      }
+
       if (action.step === 'CUSTOMER_STOREFRONT') {
         if (action.tab) {
           localStorage.setItem('customer_active_tab', action.tab);
@@ -256,28 +314,27 @@ export default function App() {
   };
 
   const handleOAuthSuccess = (email: string) => {
-    setUserEmail(email);
     setIsLoginOpen(false);
     setStep('SELECT_MODE');
   };
 
   // Custom rendering based on Step State Machine
   const stepMeta: Record<FlowStep, { path: string; name: string; tag: string }> = {
-    LANDING: { path: 'modaui.com/', name: '官方首页', tag: 'PORTAL' },
-    CHOOSE_INDUSTRY: { path: 'modaui.com/setup/industry', name: '选择行业', tag: 'INDUSTRIES' },
-    LOGIN: { path: 'modaui.com/login', name: '用户登录', tag: 'AUTH_GATE' },
-    SELECT_MODE: { path: 'modaui.com/setup/strategy', name: '决策配置', tag: 'STRATEGIES' },
-    ONBOARDING: { path: 'modaui.com/setup/spawn', name: '智体孵化', tag: 'INCUBATOR' },
-    DASHBOARD: { path: 'modaui.com/admin', name: '商家管理', tag: 'MERCHANT' },
-    CUSTOMER_STOREFRONT: { path: 'modaui.com/shop', name: '店面交易', tag: 'BUYER_MALL' },
-    AI_TEAMS: { path: 'modaui.com/admin/rosters', name: '专家小队', tag: 'AI_ROSTERS' },
-    AI_RUNTIME: { path: 'modaui.com/admin/engine', name: '执行控制', tag: 'CR_ENGINE' },
-    KNOWLEDGE_BASE: { path: 'modaui.com/admin/knowledge', name: '知识底座', tag: 'KNOWLEDGE' },
-    PLATFORM_ADMIN: { path: 'modaui.com/adminx', name: '超级控制', tag: 'SUPER_SaaS' },
+    LANDING: { path: 'pay.modaui.com/', name: '官方首页', tag: 'PORTAL' },
+    CHOOSE_INDUSTRY: { path: 'pay.modaui.com/setup/industry', name: '选择行业', tag: 'INDUSTRIES' },
+    LOGIN: { path: 'pay.modaui.com/login', name: '用户登录', tag: 'AUTH_GATE' },
+    SELECT_MODE: { path: 'pay.modaui.com/setup/strategy', name: '决策配置', tag: 'STRATEGIES' },
+    ONBOARDING: { path: 'pay.modaui.com/setup/spawn', name: '智体孵化', tag: 'INCUBATOR' },
+    DASHBOARD: { path: 'pay.modaui.com/admin', name: '商家管理', tag: 'MERCHANT' },
+    CUSTOMER_STOREFRONT: { path: 'pay.modaui.com/shop', name: '店面交易', tag: 'BUYER_MALL' },
+    AI_TEAMS: { path: 'pay.modaui.com/admin/rosters', name: '专家小队', tag: 'AI_ROSTERS' },
+    AI_RUNTIME: { path: 'pay.modaui.com/admin/engine', name: '执行控制', tag: 'CR_ENGINE' },
+    KNOWLEDGE_BASE: { path: 'pay.modaui.com/admin/knowledge', name: '知识底座', tag: 'KNOWLEDGE' },
+    PLATFORM_ADMIN: { path: 'pay.modaui.com/adminx', name: '超级控制', tag: 'SUPER_SaaS' },
   };
 
   const currentPathMeta = step === 'PLATFORM_ADMIN'
-    ? { path: adminMode === 'system' ? 'modaui.com/admin/infra' : 'modaui.com/adminx' }
+    ? { path: adminMode === 'system' ? 'pay.modaui.com/admin/infra' : 'pay.modaui.com/adminx' }
     : stepMeta[step] || stepMeta.LANDING;
 
   const isOperationalStep = [
@@ -285,8 +342,15 @@ export default function App() {
   ].includes(step);
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden selection:bg-[#1D9BF0] selection:text-white">
+    <div className="min-h-screen bg-black text-white font-sans overflow-x-hidden selection:bg-[#1D9BF0] selection:text-white relative">
       
+      {/* 官方 AI 助手 - 全局层级，确保在所有页面之上 */}
+      {step === 'LANDING' && (
+        <div className="fixed bottom-10 right-10 z-[99999]">
+          <ChatAssistant />
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         
         {/* Step 1: Landing Page */}
@@ -297,6 +361,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
+            className="relative z-10"
           >
             <LandingPage 
               onStartFlow={handleStartFlow} 
@@ -306,7 +371,7 @@ export default function App() {
             {/* Float Google Login overlay if triggered from industry card */}
             {isLoginOpen && (
               <GoogleLoginModal 
-                userEmail={userEmail}
+                userEmail={user?.email || ''}
                 onSuccess={handleOAuthSuccess}
                 onCancel={() => setIsLoginOpen(false)}
               />
@@ -377,7 +442,7 @@ export default function App() {
 
               <div className="flex justify-end pt-4">
                 <button
-                  onClick={() => setIsLoginOpen(true)}
+                  onClick={() => setStep('LOGIN')}
                   className="bg-[#1D9BF0] hover:bg-[#38BDF8] duration-150 font-bold text-xs text-white py-3 px-8 rounded-lg flex items-center space-x-2 border border-[#1D9BF0]/30"
                 >
                   <span>确认并登录</span>
@@ -387,13 +452,23 @@ export default function App() {
 
             </div>
 
-            {isLoginOpen && (
-              <GoogleLoginModal 
-                userEmail={userEmail}
-                onSuccess={handleOAuthSuccess}
-                onCancel={() => setIsLoginOpen(false)}
-              />
-            )}
+          </motion.div>
+        )}
+
+        {/* Authentication Gateway */}
+        {step === 'LOGIN' && (
+          <motion.div
+            key="login"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="min-h-screen flex items-center justify-center py-16 px-6 bg-[#050508]"
+          >
+            <GoogleLoginModal
+              userEmail={user?.email || ''}
+              onSuccess={handleOAuthSuccess}
+              onCancel={() => setStep('LANDING')}
+            />
           </motion.div>
         )}
 
@@ -415,7 +490,7 @@ export default function App() {
                   <span className="text-xl">{selectedIndustry.emoji}</span>
                   <div>
                     <h2 className="text-sm font-bold text-white font-display">配置 【{selectedIndustry.name}】</h2>
-                    <p className="text-[10px] text-[#8B949E] font-mono">{userEmail}</p>
+                    <p className="text-[10px] text-[#8B949E] font-mono">{user?.email}</p>
                   </div>
                 </div>
 
@@ -513,7 +588,7 @@ export default function App() {
             <OnboardingScreen
               industry={selectedIndustry}
               strategy={selectedStrategy}
-              userEmail={userEmail}
+              userEmail={user?.email || ''}
               companyName={customCompanyName}
               onComplete={() => setStep('DASHBOARD')}
             />
@@ -535,12 +610,12 @@ export default function App() {
                 name: customCompanyName || selectedIndustry.name
               }}
               strategy={selectedStrategy}
-              userEmail={userEmail}
-              userRole={userRole}
-              onUpdateRole={setUserRole}
+              userEmail={user?.email || ''}
+              userRole={role as any || 'customer'}
+              onUpdateRole={handleUpdateRole}
               onExit={async () => {
                 try {
-                  await signOut(auth);
+                  await logout();
                 } catch (err) {
                   console.error("Error signing out:", err);
                 }
@@ -605,23 +680,32 @@ export default function App() {
           </motion.div>
         )}
 
-        {/* Step 10: Platform Admin Portal (平台总后台) */}
+        {/* Step 11: Global Platform Admin Console */}
         {step === 'PLATFORM_ADMIN' && (
           <motion.div
             key="platform-admin"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="w-full min-h-screen bg-[#050507]"
+            className="min-h-screen bg-black"
           >
-            <PlatformAdminView 
-              onBackToLanding={() => setStep('LANDING')} 
-              userRole={userRole}
-              onUpdateRole={handleUpdateRole}
-              defaultView={adminMode}
-              onNavigate={handleNavigate}
-            />
+            {role === 'admin' ? (
+              <PlatformAdminView 
+                onBackToLanding={() => setStep('LANDING')} 
+                userRole={role as any}
+                onUpdateRole={handleUpdateRole}
+                defaultView={adminMode}
+                onNavigate={handleNavigate}
+              />
+            ) : (
+              <AdminGate 
+                onSuccess={() => {
+                  handleUpdateRole('admin');
+                  setStep('PLATFORM_ADMIN');
+                }}
+                onBack={() => setStep('LANDING')}
+              />
+            )}
           </motion.div>
         )}
 
@@ -630,7 +714,60 @@ export default function App() {
       </AnimatePresence>
 
       {/* Universal Floating System Core Tree Trigger */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+        {/* System Control Panel */}
+        <div className="flex gap-2">
+          {/* Notification Center Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsNotificationCenterOpen(true)}
+            className="relative flex items-center justify-center w-10 h-10 bg-[#0A0A0C] hover:bg-neutral-900 border border-[#1D9BF0]/30 hover:border-[#1D9BF0] rounded-full shadow-lg transition-all"
+            title="消息中心"
+          >
+            <Bell className="w-5 h-5 text-[#1D9BF0]" />
+            {unreadNotifications > 0 && (
+              <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                {unreadNotifications > 9 ? '9+' : unreadNotifications}
+              </span>
+            )}
+          </motion.button>
+
+          {/* Audit Log Viewer Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsAuditLogViewerOpen(true)}
+            className="flex items-center justify-center w-10 h-10 bg-[#0A0A0C] hover:bg-neutral-900 border border-[#1D9BF0]/30 hover:border-[#1D9BF0] rounded-full shadow-lg transition-all"
+            title="审计日志"
+          >
+            <Eye className="w-5 h-5 text-[#1D9BF0]" />
+          </motion.button>
+
+          {/* Monitoring Dashboard Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsMonitoringOpen(true)}
+            className="flex items-center justify-center w-10 h-10 bg-[#0A0A0C] hover:bg-neutral-900 border border-[#1D9BF0]/30 hover:border-[#1D9BF0] rounded-full shadow-lg transition-all"
+            title="监控面板"
+          >
+            <Activity className="w-5 h-5 text-[#1D9BF0]" />
+          </motion.button>
+
+          {/* Settings Center Button */}
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setIsSettingsCenterOpen(true)}
+            className="flex items-center justify-center w-10 h-10 bg-[#0A0A0C] hover:bg-neutral-900 border border-[#1D9BF0]/30 hover:border-[#1D9BF0] rounded-full shadow-lg transition-all"
+            title="平台设置"
+          >
+            <SettingsIcon className="w-5 h-5 text-[#1D9BF0]" />
+          </motion.button>
+        </div>
+
+        {/* Architecture Tree Button */}
         <button
           onClick={() => setIsBridgeOpen(true)}
           className="flex items-center space-x-2 px-4.5 py-3 bg-[#0A0A0C] hover:bg-neutral-900 border border-sky-500/30 hover:border-sky-400 font-mono text-xs font-bold text-sky-400 hover:text-white rounded-full shadow-2xl hover:scale-105 active:scale-95 duration-150 cursor-pointer shadow-sky-500/5 select-none"
@@ -650,6 +787,30 @@ export default function App() {
             onNavigate={handleNavigate}
           />
         )}
+
+        {/* Notification Center Panel */}
+        <NotificationCenter
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
+        />
+
+        {/* Audit Log Viewer Panel */}
+        <AuditLogViewer
+          isOpen={isAuditLogViewerOpen}
+          onClose={() => setIsAuditLogViewerOpen(false)}
+        />
+
+        {/* Monitoring Dashboard Panel */}
+        <MonitoringDashboard
+          isOpen={isMonitoringOpen}
+          onClose={() => setIsMonitoringOpen(false)}
+        />
+
+        {/* Platform Settings Center Panel */}
+        <PlatformSettingsCenter
+          isOpen={isSettingsCenterOpen}
+          onClose={() => setIsSettingsCenterOpen(false)}
+        />
       </AnimatePresence>
 
     </div>

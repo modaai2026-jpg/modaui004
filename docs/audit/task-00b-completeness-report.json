@@ -1,0 +1,1058 @@
+{
+  "timestamp": "2026-06-04T13:51:04.608Z",
+  "pageFeatures": [
+    {
+      "step": "LANDING",
+      "path": "/"
+    },
+    {
+      "step": "CHOOSE_INDUSTRY",
+      "path": "/setup/industry"
+    },
+    {
+      "step": "LOGIN",
+      "path": "/login"
+    },
+    {
+      "step": "SELECT_MODE",
+      "path": "/setup/strategy"
+    },
+    {
+      "step": "ONBOARDING",
+      "path": "/setup/spawn"
+    },
+    {
+      "step": "DASHBOARD",
+      "path": "/admin"
+    },
+    {
+      "step": "CUSTOMER_STOREFRONT",
+      "path": "/shop"
+    },
+    {
+      "step": "AI_TEAMS",
+      "path": "/admin/rosters"
+    },
+    {
+      "step": "AI_RUNTIME",
+      "path": "/admin/engine"
+    },
+    {
+      "step": "KNOWLEDGE_BASE",
+      "path": "/admin/knowledge"
+    },
+    {
+      "step": "PLATFORM_ADMIN",
+      "path": "/adminx"
+    }
+  ],
+  "menuSteps": [
+    "LANDING",
+    "CUSTOMER_STOREFRONT",
+    "PLATFORM_ADMIN",
+    "AI_TEAMS",
+    "AI_RUNTIME",
+    "KNOWLEDGE_BASE",
+    "DASHBOARD",
+    "CHOOSE_INDUSTRY",
+    "SELECT_MODE",
+    "ONBOARDING"
+  ],
+  "hashLinks": [
+    "#/adminx"
+  ],
+  "routeLinks": [],
+  "apiEndpoints": [
+    {
+      "method": "GET",
+      "path": "/api/health"
+    },
+    {
+      "method": "GET",
+      "path": "/api/status"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/2fa/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/2fa/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users"
+    },
+    {
+      "method": "GET",
+      "path": "/api/merchants"
+    },
+    {
+      "method": "POST",
+      "path": "/api/merchants"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tenants/initialize"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stores/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/stores/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stores"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stores/count"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/marketplaces/stores"
+    },
+    {
+      "method": "POST",
+      "path": "/api/merchants/:id/suspend"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products"
+    },
+    {
+      "method": "POST",
+      "path": "/api/products"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/products/:id"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/products/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders"
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/:id"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/orders/:id/dispatch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/:id/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/:id/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/:id/return"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/stripe/checkout"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/alipay/checkout"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/wechat/checkout"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/wechat/callback"
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/paypal/checkout"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/paypal/success"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/paypal/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/audit/logs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "method": "GET",
+      "path": "/api/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/consume"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/sync_google"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/store/theme_deploy"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/audit_ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shipping/quote"
+    },
+    {
+      "method": "GET",
+      "path": "/api/knowledge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/knowledge/add"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/knowledge/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/tasks"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/execute"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat"
+    },
+    {
+      "method": "POST",
+      "path": "/api/fashion/design"
+    },
+    {
+      "method": "POST",
+      "path": "/api/fashion/products"
+    },
+    {
+      "method": "GET",
+      "path": "/api/fashion/products"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ai/openai/generate"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ai/langchain/agent"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ai/ollama/generate"
+    },
+    {
+      "method": "GET",
+      "path": "/api/cart"
+    },
+    {
+      "method": "POST",
+      "path": "/api/cart/add"
+    },
+    {
+      "method": "POST",
+      "path": "/api/cart/remove"
+    },
+    {
+      "method": "POST",
+      "path": "/api/cart/clear"
+    },
+    {
+      "method": "POST",
+      "path": "/api/cart/update-quantity"
+    },
+    {
+      "method": "POST",
+      "path": "/api/cart/coupon"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tenants"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/tenants/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/settings"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/tenants"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/stats"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/platform/tenants/:id/quota"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/platform/settings"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/config-registry"
+    },
+    {
+      "method": "POST",
+      "path": "/api/platform/config-registry"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/config-registry/report"
+    },
+    {
+      "method": "GET",
+      "path": "/api/billing/subscriptions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/subscribe"
+    },
+    {
+      "method": "GET",
+      "path": "/api/billing/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/overview"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/withdraw"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/api/market/install"
+    },
+    {
+      "method": "GET",
+      "path": "/api/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/api/templates/install"
+    },
+    {
+      "method": "GET",
+      "path": "/api/app-store"
+    },
+    {
+      "method": "GET",
+      "path": "/api/app-installations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/app-store/:appId/install"
+    },
+    {
+      "method": "POST",
+      "path": "/api/app-store/:appId/uninstall"
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns"
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/create"
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/launch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/analytics"
+    },
+    {
+      "method": "GET",
+      "path": "/api/channels"
+    },
+    {
+      "method": "POST",
+      "path": "/api/channels/tiktok/connect"
+    },
+    {
+      "method": "POST",
+      "path": "/api/channels/xiaohongshu/sync-products"
+    },
+    {
+      "method": "POST",
+      "path": "/api/channels/douyin/sync-orders"
+    },
+    {
+      "method": "GET",
+      "path": "/api/roles"
+    },
+    {
+      "method": "POST",
+      "path": "/api/roles/create"
+    },
+    {
+      "method": "GET",
+      "path": "/api/staff"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/staff/:staffId/update-role"
+    },
+    {
+      "method": "POST",
+      "path": "/api/staff/invite"
+    },
+    {
+      "method": "GET",
+      "path": "/api/themes"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/themes/:themeId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/themes/:themeId/publish"
+    },
+    {
+      "method": "GET",
+      "path": "/api/webhooks"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/register"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/webhooks/:webhookId"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/api-keys"
+    },
+    {
+      "method": "POST",
+      "path": "/api/settings/api-keys"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/settings/api-keys/:keyId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/webhooks/test-dispatch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/gateways"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/gateways/:gatewayId/test"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/currencies"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/payment-links"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/virtual-cards"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/transaction/create"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/mobile/recharge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/health"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/tenants"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/tenants/:tenantId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/lva/tenants/:tenantId/quota"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/audit/logs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/lva/ai/audit_ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/usage/:tenantId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/lva/allocations"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/:driver/redirect"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/:driver/callback"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/db"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/db/write"
+    },
+    {
+      "method": "GET",
+      "path": "*"
+    }
+  ],
+  "servicePaths": [
+    "/api/tasks",
+    "/api/agents/execute",
+    "/api/fashion/design",
+    "/api/fashion/products",
+    "/api/channels/xiaohongshu/sync-products",
+    "/api/channels/douyin/sync-orders",
+    "/api/channels/tiktok/connect",
+    "/api/chat",
+    "/api/orders",
+    "/api/knowledge/add",
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+    "/api/campaigns/create",
+    "/api/status",
+    "http://localhost:11434/api/tags",
+    "/api/admin/db",
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/lva/tenants",
+    "/api/lva/allocations",
+    "/api/stores/count",
+    "/api/payments/paypal/checkout",
+    "/api/payments/wechat/checkout",
+    "/api/payments/wechat/callback",
+    "https://github.com/login/oauth/access_token",
+    "https://api.github.com/user",
+    "/api/auth/me",
+    "/api/merchants",
+    "/api/cart/add",
+    "/api/cart/remove",
+    "/api/cart/update-quantity",
+    "/api/cart/coupon",
+    "/api/cart/clear",
+    "/api/tenants",
+    "/api/platform/settings",
+    "/api/platform/config-registry",
+    "/api/platform/config-registry/report",
+    "/api/templates",
+    "/api/templates/install",
+    "/api/products",
+    "/api/payments/stripe/checkout",
+    "/api/payments/alipay/checkout",
+    "/api/ai/openai/generate",
+    "/api/ai/ollama/generate",
+    "/api/ai/langchain/agent",
+    "/api/app-store",
+    "/api/roles/create",
+    "/api/staff/invite",
+    "/api/webhooks/register",
+    "/api/webhooks/test-dispatch",
+    "/api/settings/api-keys"
+  ],
+  "databaseTables": [
+    "users",
+    "sessions",
+    "merchants",
+    "stores",
+    "products",
+    "carts",
+    "orders",
+    "payments",
+    "finance",
+    "ai_teams",
+    "ai_agents",
+    "kb_chunks",
+    "agent_tasks",
+    "agents",
+    "tenants",
+    "audit_logs",
+    "notifications",
+    "events",
+    "appInstallations",
+    "campaigns",
+    "campaignAnalytics",
+    "channelConnections",
+    "roles",
+    "staffPermissions",
+    "themes",
+    "webhookRegistrations",
+    "webhookLogs",
+    "apiKeys",
+    "currencies",
+    "paymentLinks",
+    "virtualCards",
+    "p2pOffers",
+    "wallets",
+    "giftCards",
+    "subscriptions",
+    "transactions",
+    "quota_allocations",
+    "invoices",
+    "platformSettings",
+    "config_registry"
+  ],
+  "databaseTableUsage": {
+    "users": false,
+    "sessions": false,
+    "merchants": false,
+    "stores": false,
+    "products": false,
+    "carts": false,
+    "orders": false,
+    "payments": false,
+    "finance": false,
+    "ai_teams": false,
+    "ai_agents": false,
+    "kb_chunks": false,
+    "agent_tasks": false,
+    "agents": false,
+    "tenants": false,
+    "audit_logs": true,
+    "notifications": true,
+    "events": true,
+    "appInstallations": false,
+    "campaigns": false,
+    "campaignAnalytics": false,
+    "channelConnections": false,
+    "roles": false,
+    "staffPermissions": false,
+    "themes": false,
+    "webhookRegistrations": false,
+    "webhookLogs": false,
+    "apiKeys": false,
+    "currencies": false,
+    "paymentLinks": false,
+    "virtualCards": false,
+    "p2pOffers": false,
+    "wallets": false,
+    "giftCards": false,
+    "subscriptions": false,
+    "transactions": false,
+    "quota_allocations": false,
+    "invoices": false,
+    "platformSettings": true,
+    "config_registry": true
+  },
+  "orphanPages": [
+    {
+      "step": "LOGIN",
+      "path": "/login"
+    }
+  ],
+  "orphanApis": [
+    {
+      "method": "GET",
+      "path": "/api/health"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/2fa/generate"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/2fa/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/api/users"
+    },
+    {
+      "method": "POST",
+      "path": "/api/tenants/initialize"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stores/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/stores/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/marketplaces/stores"
+    },
+    {
+      "method": "POST",
+      "path": "/api/merchants/:id/suspend"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/products/:id"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/products/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders/:id"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/orders/:id/dispatch"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/:id/cancel"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/:id/refund"
+    },
+    {
+      "method": "POST",
+      "path": "/api/orders/:id/return"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/paypal/success"
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/paypal/cancel"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/audit/logs"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "method": "GET",
+      "path": "/api/events"
+    },
+    {
+      "method": "POST",
+      "path": "/api/events/consume"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/sync_google"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/store/theme_deploy"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/ai/audit_ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/shipping/quote"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/knowledge/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/tasks"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/tenants/:id"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/tenants"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/stats"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/platform/tenants/:id/quota"
+    },
+    {
+      "method": "GET",
+      "path": "/api/billing/subscriptions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/billing/subscribe"
+    },
+    {
+      "method": "GET",
+      "path": "/api/billing/invoices"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/overview"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/withdraw"
+    },
+    {
+      "method": "GET",
+      "path": "/api/market/templates"
+    },
+    {
+      "method": "POST",
+      "path": "/api/market/install"
+    },
+    {
+      "method": "GET",
+      "path": "/api/app-installations"
+    },
+    {
+      "method": "POST",
+      "path": "/api/app-store/:appId/install"
+    },
+    {
+      "method": "POST",
+      "path": "/api/app-store/:appId/uninstall"
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/launch"
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/analytics"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/staff/:staffId/update-role"
+    },
+    {
+      "method": "GET",
+      "path": "/api/themes"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/themes/:themeId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/themes/:themeId/publish"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/webhooks/:webhookId"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/settings/api-keys/:keyId"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/overview"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/gateways"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/gateways/:gatewayId/test"
+    },
+    {
+      "method": "GET",
+      "path": "/api/finance/currencies"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/payment-links"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/virtual-cards"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/transaction/create"
+    },
+    {
+      "method": "POST",
+      "path": "/api/finance/mobile/recharge"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/health"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/tenants/:tenantId"
+    },
+    {
+      "method": "POST",
+      "path": "/api/lva/tenants/:tenantId/quota"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/audit/logs"
+    },
+    {
+      "method": "POST",
+      "path": "/api/lva/ai/audit_ledger"
+    },
+    {
+      "method": "GET",
+      "path": "/api/lva/usage/:tenantId"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/:driver/redirect"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/:driver/callback"
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/db/write"
+    },
+    {
+      "method": "GET",
+      "path": "*"
+    }
+  ],
+  "orphanTables": [
+    "users",
+    "sessions",
+    "merchants",
+    "stores",
+    "products",
+    "carts",
+    "orders",
+    "payments",
+    "finance",
+    "ai_teams",
+    "ai_agents",
+    "kb_chunks",
+    "agent_tasks",
+    "agents",
+    "tenants",
+    "appInstallations",
+    "campaigns",
+    "campaignAnalytics",
+    "channelConnections",
+    "roles",
+    "staffPermissions",
+    "themes",
+    "webhookRegistrations",
+    "webhookLogs",
+    "apiKeys",
+    "currencies",
+    "paymentLinks",
+    "virtualCards",
+    "p2pOffers",
+    "wallets",
+    "giftCards",
+    "subscriptions",
+    "transactions",
+    "quota_allocations",
+    "invoices"
+  ],
+  "featureCount": 183,
+  "lostFeatureCount": 105,
+  "recoveredFeatureCount": 0,
+  "truthScore": 90.91,
+  "completenessScore": 42.62
+}

@@ -91,6 +91,16 @@ export interface SysAuditLog {
   severity: 'info' | 'warn' | 'error' | 'security';
 }
 
+export interface OperationalDocument {
+  id: string;
+  tenantId: string;
+  title: string;
+  content: string;
+  tags: string[];
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface SystemCronJob {
   id: string;
   name: string;

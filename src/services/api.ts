@@ -40,32 +40,65 @@ const handleResponse = async (res: Response) => {
   }
 };
 
+// Helper to get authenticated headers
+const getAuthHeaders = async (customHeaders: Record<string, string> = {}) => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...customHeaders
+  };
+  
+  if (auth.currentUser) {
+    try {
+      const token = await auth.currentUser.getIdToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    } catch (e) {
+      console.warn("Could not get Firebase ID token:", e);
+    }
+  } else {
+    const sessionId = localStorage.getItem('sessionId');
+    if (sessionId) {
+      headers['Authorization'] = sessionId;
+    }
+  }
+  
+  return headers;
+};
+
 export const apiService = {
   // === Authentications ===
   auth: {
-    async register(email: string, industryId: string, operatingMode: string, planId: string) {
+    async register(email: string, password: string, industryId?: string, operatingMode?: string, planId?: string, role?: string) {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, industryId, operatingMode, planId })
+        body: JSON.stringify({ email, password, industryId, operatingMode, planId, role })
       });
       return handleResponse(res);
     },
 
-    async login(email: string) {
+    async login(email: string, password: string) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ email, password })
       });
       return handleResponse(res);
     },
 
-    async logout(email: string) {
+    async socialLogin(email: string, provider: string, name?: string, avatar?: string) {
+      const res = await fetch('/api/auth/social', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, provider, name, avatar })
+      });
+      return handleResponse(res);
+    },
+
+    async logout(sessionId?: string, refreshToken?: string) {
       const res = await fetch('/api/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ sessionId, refreshToken })
       });
       return handleResponse(res);
     },
@@ -77,30 +110,68 @@ export const apiService = {
         body: JSON.stringify({ sessionId })
       });
       return handleResponse(res);
+    },
+
+    async refresh(refreshToken: string) {
+      const res = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      });
+      return handleResponse(res);
+    },
+
+    async verifyEmail(token: string) {
+      const res = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      });
+      return handleResponse(res);
+    },
+
+    async requestPasswordReset(email: string) {
+      const res = await fetch('/api/auth/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      return handleResponse(res);
+    },
+
+    async confirmPasswordReset(token: string, newPassword: string) {
+      const res = await fetch('/api/auth/password-reset/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, newPassword })
+      });
+      return handleResponse(res);
     }
   },
 
   // === Multi-tenants & Merchants Config ===
   merchants: {
     async list() {
-      const res = await fetch('/api/merchants');
+      const res = await fetch('/api/merchants', {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     },
 
     async create(newTenant: Partial<TenantConfig>) {
       const res = await fetch('/api/merchants', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ newTenant })
       });
       return handleResponse(res);
     },
 
-    async suspend(tenantId: string, reason: string) {
+    async suspend(tenantId: string, reason: string, suspend = true) {
       const res = await fetch(`/api/merchants/${tenantId}/suspend`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason })
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ reason, suspend })
       });
       return handleResponse(res);
     }
@@ -109,14 +180,16 @@ export const apiService = {
   // === Stores Custom configurations ===
   stores: {
     async get(id: string) {
-      const res = await fetch(`/api/stores/${id}`);
+      const res = await fetch(`/api/stores/${id}`, {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     },
 
     async update(id: string, storeData: { name?: string; domain?: string; branding?: { logo?: string; colorTheme?: string; bannerText?: string } }) {
       const res = await fetch(`/api/stores/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(storeData)
       });
       return handleResponse(res);
@@ -126,13 +199,15 @@ export const apiService = {
   // === Cart Service API (Dynamically verified server-backed state) ===
   cart: {
     async get(userId: string) {
-      const res = await fetch(`/api/cart?userId=${userId}`);
+      const res = await fetch(`/api/cart?userId=${userId}`, {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     },
     async add(userId: string, productId: string, quantity: number) {
       const res = await fetch('/api/cart/add', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ userId, productId, quantity })
       });
       return handleResponse(res);
@@ -140,15 +215,31 @@ export const apiService = {
     async remove(userId: string, productId: string) {
       const res = await fetch('/api/cart/remove', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ userId, productId })
+      });
+      return handleResponse(res);
+    },
+    async updateQuantity(userId: string, productId: string, quantity: number) {
+      const res = await fetch('/api/cart/update-quantity', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ userId, productId, quantity })
+      });
+      return handleResponse(res);
+    },
+    async applyCoupon(userId: string, coupon: string) {
+      const res = await fetch('/api/cart/coupon', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ userId, coupon })
       });
       return handleResponse(res);
     },
     async clear(userId: string) {
       const res = await fetch('/api/cart/clear', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ userId })
       });
       return handleResponse(res);
@@ -158,13 +249,15 @@ export const apiService = {
   // === Platform Tenants Directory & Quotas ===
   tenants: {
     async list() {
-      const res = await fetch('/api/tenants');
+      const res = await fetch('/api/tenants', {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     },
     async update(id: string, updateData: { quotaLimit?: number; billingStatus?: 'paid' | 'unpaid' }) {
       const res = await fetch(`/api/tenants/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(updateData)
       });
       return handleResponse(res);
@@ -174,14 +267,50 @@ export const apiService = {
   // === Platform Settings Config Center ===
   platformSettings: {
     async get() {
-      const res = await fetch('/api/platform/settings');
+      const res = await fetch('/api/platform/settings', {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     },
-    async update(settings: { maintenanceMode: boolean; allowRegistration: boolean; defaultQuotaLimit?: number }) {
+    async update(settings: any) {
       const res = await fetch('/api/platform/settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify(settings)
+      });
+      return handleResponse(res);
+    }
+  },
+  configRegistry: {
+    async list() {
+      const res = await fetch('/api/platform/config-registry', {
+        headers: await getAuthHeaders()
+      });
+      return handleResponse(res);
+    },
+    async register(item: {
+      module: string;
+      key: string;
+      category: string;
+      type: string;
+      default_value: any;
+      current_value: any;
+      tenant_scope: string;
+      description: string;
+      uiPath: string;
+      required: boolean;
+      updated_by: string;
+    }) {
+      const res = await fetch('/api/platform/config-registry', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify(item)
+      });
+      return handleResponse(res);
+    },
+    async report() {
+      const res = await fetch('/api/platform/config-registry/report', {
+        headers: await getAuthHeaders()
       });
       return handleResponse(res);
     }
@@ -190,13 +319,15 @@ export const apiService = {
   // === Industry Blueprint Templates Library ===
   templates: {
     async list() {
-      const res = await fetch('/api/templates');
+      const res = await fetch('/api/templates', {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     },
     async install(tenantId: string, industryId: string) {
       const res = await fetch('/api/templates/install', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getAuthHeaders(),
         body: JSON.stringify({ tenantId, industryId })
       });
       return handleResponse(res);
@@ -268,6 +399,22 @@ export const apiService = {
         body: JSON.stringify({ tenantId, industryId, amount, reason })
       });
       return handleResponse(res);
+    },
+    async cancel(tenantId: string, industryId: string, id: string, reason: string) {
+      const res = await fetch(`/api/orders/${id}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, industryId, reason })
+      });
+      return handleResponse(res);
+    },
+    async return(tenantId: string, industryId: string, id: string, reason: string) {
+      const res = await fetch(`/api/orders/${id}/return`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, industryId, reason })
+      });
+      return handleResponse(res);
     }
   },
 
@@ -311,6 +458,29 @@ export const apiService = {
 
     async getLedger(tenantId: string): Promise<{ success: boolean; logs: BillingTransaction[] }> {
       const res = await fetch(`/api/finance/ledger?tenantId=${tenantId}`);
+      return handleResponse(res);
+    }
+  },
+
+  billing: {
+    async subscribe(planId: string) {
+      const res = await fetch('/api/billing/subscribe', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ planId })
+      });
+      return handleResponse(res);
+    },
+    async listSubscriptions() {
+      const res = await fetch('/api/billing/subscriptions', {
+        headers: await getAuthHeaders()
+      });
+      return handleResponse(res);
+    },
+    async listInvoices() {
+      const res = await fetch('/api/billing/invoices', {
+        headers: await getAuthHeaders()
+      });
       return handleResponse(res);
     }
   },
@@ -391,6 +561,61 @@ export const apiService = {
       });
       return handleResponse(res);
     },
+    async workerLease(agentId?: string) {
+      const res = await fetch('/api/agents/worker/next', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId })
+      });
+      return handleResponse(res);
+    },
+
+    async workerComplete(taskId: string, result: string, logs?: string[]) {
+      const res = await fetch('/api/agents/worker/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId, result, logs })
+      });
+      return handleResponse(res);
+    },
+
+    async pendingCount() {
+      const res = await fetch('/api/agents/worker/pendingCount');
+      return handleResponse(res);
+    }
+    ,
+    async failedTasks() {
+      const res = await fetch('/api/agents/worker/failed');
+      return handleResponse(res);
+    },
+
+    async requeueExpired(leaseTimeoutMs?: number) {
+      const res = await fetch('/api/agents/worker/requeue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leaseTimeoutMs })
+      });
+      return handleResponse(res);
+    }
+  },
+
+  // === Operational Documents & Platform Knowledge ===
+  documents: {
+    async list(tenantId?: string) {
+      const url = tenantId ? `/api/operations/documents?tenantId=${tenantId}` : '/api/operations/documents';
+      const res = await fetch(url, {
+        headers: await getAuthHeaders()
+      });
+      return handleResponse(res);
+    },
+    async create(tenantId: string, title: string, content: string, tags: string[] = []) {
+      const res = await fetch('/api/operations/documents', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ tenantId, title, content, tags })
+      });
+      return handleResponse(res);
+    }
   },
 
   // === System Audit Logs & Global telemetry ===
@@ -399,7 +624,17 @@ export const apiService = {
       let url = `/api/audit/logs?tenantId=${tenantId}`;
       if (component) url += `&component=${encodeURIComponent(component)}`;
       if (severity) url += `&severity=${encodeURIComponent(severity)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: await getAuthHeaders()
+      });
+      return handleResponse(res);
+    },
+    async create(tenantId: string, action: string, component: string, details: string, severity: 'info' | 'warn' | 'error' | 'security' = 'info') {
+      const res = await fetch('/api/audit/logs', {
+        method: 'POST',
+        headers: await getAuthHeaders(),
+        body: JSON.stringify({ tenantId, action, component, details, severity })
+      });
       return handleResponse(res);
     }
   },
