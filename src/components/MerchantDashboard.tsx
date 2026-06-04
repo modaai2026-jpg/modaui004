@@ -41,6 +41,13 @@ import HyperMemEngine from './HyperMemEngine';
 import LangChainValidator from './LangChainValidator';
 import BillingSubscriptionPanel from './BillingSubscriptionPanel';
 import MerchantWorkbench from './merchant/MerchantWorkbench';
+import MerchantLayout from './merchant-templates/MerchantLayout';
+import FashionMerchantDashboard from './dashboards/FashionMerchantDashboard';
+import CateringMerchantDashboard from './dashboards/CateringMerchantDashboard';
+import RetailMerchantDashboard from './dashboards/RetailMerchantDashboard';
+import BeautyMerchantDashboard from './dashboards/BeautyMerchantDashboard';
+import HotelMerchantDashboard from './dashboards/HotelMerchantDashboard';
+import InfluencerMerchantDashboard from './dashboards/InfluencerMerchantDashboard';
 import { 
   DEFAULT_CATEGORIES, 
   DEFAULT_SUPPLIERS, 
@@ -90,6 +97,50 @@ export default function MerchantDashboard({
   onUpdateRole,
   onNavigate
 }: MerchantDashboardProps) {
+  // Industry-specific early return: render specialized dashboard templates
+  if (industry && industry.id) {
+    switch (industry.id) {
+      case 'fashion':
+        return (
+          <MerchantLayout>
+            <FashionMerchantDashboard />
+          </MerchantLayout>
+        );
+      case 'catering':
+        return (
+          <MerchantLayout>
+            <CateringMerchantDashboard />
+          </MerchantLayout>
+        );
+      case 'retail':
+        return (
+          <MerchantLayout>
+            <RetailMerchantDashboard />
+          </MerchantLayout>
+        );
+      case 'beauty':
+        return (
+          <MerchantLayout>
+            <BeautyMerchantDashboard />
+          </MerchantLayout>
+        );
+      case 'hotel':
+        return (
+          <MerchantLayout>
+            <HotelMerchantDashboard />
+          </MerchantLayout>
+        );
+      case 'influencer':
+        return (
+          <MerchantLayout>
+            <InfluencerMerchantDashboard />
+          </MerchantLayout>
+        );
+      default:
+        // fallthrough to existing monolithic dashboard if no match
+        break;
+    }
+  }
   // Backstage Active Menu State
   // 'workbench' | 'store' | 'product' | 'order' | 'customer' | 'marketing' | 'analytics' | 'settings' | 'team_members' | 'app_store' | 'developer' | 'rbac'
   const getInitialMenuFromUrl = () => {
