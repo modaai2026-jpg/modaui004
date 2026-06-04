@@ -21,6 +21,7 @@ import AuditLogViewer from './components/AuditLogViewer';
 import MonitoringDashboard from './components/MonitoringDashboard';
 import PlatformSettingsCenter from './components/PlatformSettingsCenter';
 import BusinessDashboard from './components/business/BusinessDashboard';
+import BusinessRouter from './components/business/BusinessRouter';
 import { db } from './services/firebase';
 import { ChatAssistant, ThemeProvider } from './lib/ui';
 import { usePermission, UserRole } from './hooks/usePermission';
@@ -649,7 +650,7 @@ function AppContent() {
               transition={{ duration: 0.2 }}
             >
               {/* Render the isolated business dashboard */}
-              <BusinessDashboard industryId={industryId as any} />
+              <BusinessRouter />
             </motion.div>
           );
         })()}
