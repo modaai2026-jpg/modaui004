@@ -1,6 +1,7 @@
 import React from 'react';
 import BusinessDashboard from './BusinessDashboard';
 import OrdersPage from './pages/OrdersPage';
+import OrderDetailPage from './pages/OrderDetailPage';
 import InventoryPage from './pages/InventoryPage';
 import ProductsPage from './pages/ProductsPage';
 import FinancePage from './pages/FinancePage';
@@ -21,6 +22,11 @@ const BusinessRouter: React.FC = () => {
   if (!subpath) return <BusinessDashboard industryId={industryId as any} />;
 
   const first = subpath.split('/')[0];
+
+  const parts = subpath.split('/').filter(Boolean);
+  if (parts[0] === 'orders' && parts[1]) {
+    return <OrderDetailPage orderId={parts[1]} />;
+  }
 
   switch (first) {
     case 'orders':
