@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import PagePlaceholder from './PagePlaceholder';
 import { db, collection, getDocs, getDoc, doc } from '../../../services/firebase';
+import OrderFulfillmentService from '../../../services/order-fulfillment.service';
 
 const OrdersPage: React.FC = () => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -24,6 +25,29 @@ const OrdersPage: React.FC = () => {
   return (
     <PagePlaceholder title="订单管理">
       <div className="space-y-4">
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-1 bg-emerald-600 text-white rounded"
+            onClick={async () => {
+              try {
+                const sample = {
+                  customerId: 'guest-quick',
+                  items: [{ skuId: 'sku-1', qty: 1, price: 19.9 }],
+                  total: 19.9,
+                };
+                const industryId = industry;
+                const res = await OrderFulfillmentService.createOrderWithAllocation(industryId, sample);
+                alert(`下单成功：${res.id}`);
+                window.location.reload();
+              } catch (err: any) {
+                console.error('下单失败', err);
+                alert(`下单失败：${err?.message || String(err)}`);
+              }
+            }}
+          >
+            下单并保留库存（示例）
+          </button>
+        </div>
         {orders.length === 0 && <p>暂无订单。</p>}
         <ul className="space-y-2">
           {orders.map(o => (
