@@ -12,6 +12,7 @@ import HyperMemEngine from './HyperMemEngine';
 import LangGraphCanvas from './LangGraphCanvas';
 import ECCAgentConsole from './ECCAgentConsole';
 import LangChainValidator from './LangChainValidator';
+import { apiService, getActiveTenantId } from '../services/api';
 
 interface PromptTemplate {
   id: string;
@@ -97,6 +98,8 @@ export default function AIRuntimeView({ onBackToLanding }: { onBackToLanding: ()
   // Real-time latency & live system state
   const [sysLatency, setSysLatency] = useState<number>(12);
   const [uptimeSeconds, setUptimeSeconds] = useState<number>(86430);
+  const [tenantId, setTenantId] = useState<string>(getActiveTenantId());
+
   const [simLogs, setSimLogs] = useState<string[]>([
     '【系统就绪】AI 运行层多智体调度核心 (ModaUI Cognitive Scheduler v3.1) 准备完毕。',
     '【心跳检测】节点状态: 🟢 DeepSeek-R1 & Gemini-2.5-Ultra 极速算力通道握手成功 (12ms)。',
@@ -386,19 +389,13 @@ export default function AIRuntimeView({ onBackToLanding }: { onBackToLanding: ()
     handleAddLog(`【强行唤醒】[ASYNC TASK TRIGGER] 立刻强行调用后台任务：<${job.name}> 进行实地理算并同步云 Firestore...`);
 
     try {
-      const response = await fetch('/api/agents/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: job.assignee || 'Soren (运营综合)',
-          teamId: 'cron_scheduler_team',
-          inputMessage: `计划任务执行启动：${job.task}`,
-          rolePrompt: `你是一个摩整数字员工智能工作工作站。针对创始人调度的定时时段任务，结合你所属的专业岗位，输出精准的代运营和结账审计理算。`,
-          tenantId
-        })
-      });
-      const data = await response.json();
-      if (data.success) {
+      const data = await apiService.agents.execute(
+        tenantId,
+        job.assignee || 'Soren (运营综合)',
+        `计划任务执行启动：${job.task}`,
+        `你是一个摩整数字员工智能工作站。针对创始人调度的定时时段任务，结合你所属的专业岗位，输出精准的代运营和结账审计理算。`
+      );
+      if (data && data.success) {
         handleAddLog(`【智体响应】《${job.name}》实数理算成果：\n${data.response}`);
         setCrons(prev => prev.map(c => {
           if (c.id === id) {
@@ -407,7 +404,7 @@ export default function AIRuntimeView({ onBackToLanding }: { onBackToLanding: ()
           return c;
         }));
       } else {
-        throw new Error(data.error);
+        throw new Error(data?.error || '后端执行失败');
       }
     } catch (e: any) {
       handleAddLog(`【调度警报】时辰任务调度阻碍失败: ${e.message}`);
@@ -419,6 +416,67 @@ export default function AIRuntimeView({ onBackToLanding }: { onBackToLanding: ()
       }));
     }
   };
+
+  // Agent Queue panel state
+  const [agentQueue, setAgentQueue] = useState<any[]>([]);
+  const fetchAgentQueue = async () => {
+    try {
+      const activeTenantId = getActiveTenantId();
+      setTenantId(activeTenantId);
+      const resp = await apiService.agents.listTasks(activeTenantId);
+      if (resp && resp.success) setAgentQueue(resp.tasks || []);
+    } catch (e) {
+      console.warn('Failed to fetch agent queue:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchAgentQueue();
+    const t = setInterval(fetchAgentQueue, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleLeaseAsWorker = async (taskId?: string) => {
+    try {
+      const res = await apiService.agents.workerLease();
+      if (res && res.success) {
+        handleAddLog(`Worker leased task: ${res.task?.id || 'none'}`);
+        await fetchAgentQueue();
+      }
+    } catch (e) {}
+  };
+
+  const handleCompleteAsWorker = async (task: any) => {
+    try {
+      const result = `Manual complete by UI at ${new Date().toISOString()}`;
+      await apiService.agents.workerComplete(task.id, result, [`Completed in UI by ${auth.currentUser?.email || 'UI'}`]);
+      handleAddLog(`Marked task ${task.id} completed via UI.`);
+      await fetchAgentQueue();
+    } catch (e) {}
+  };
+
+  const [failedCount, setFailedCount] = useState<number>(0);
+  const fetchFailedTasks = async () => {
+    try {
+      const res = await apiService.agents.failedTasks();
+      if (res && res.success) {
+        setFailedCount((res.failed || []).length || 0);
+      }
+    } catch (e) {}
+  };
+
+  const handleRequeueExpired = async () => {
+    try {
+      const resp = await apiService.agents.requeueExpired(120000);
+      handleAddLog(`强制回收已执行，恢复任务数: ${resp.recovered || 0}`);
+      await fetchAgentQueue();
+      await fetchFailedTasks();
+    } catch (e) {
+      handleAddLog('强制回收失败');
+    }
+  };
+
+  useEffect(() => { fetchFailedTasks(); const t = setInterval(fetchFailedTasks, 15000); return () => clearInterval(t); }, []);
 
   // 6. Memory Engine (Long-term / Short-term Vector Embedding indexer)
   const [vectorDb, setVectorDb] = useState<VectorMemory[]>([
@@ -659,11 +717,51 @@ export default function AIRuntimeView({ onBackToLanding }: { onBackToLanding: ()
                 exit={{ opacity: 0 }}
                 className="space-y-6"
               >
-                <ECCAgentConsole 
-                  agents={agents}
-                  onAddLog={handleAddLog}
-                  onUpdateAgentTask={handleUpdateAgentTask}
-                />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2">
+                    <ECCAgentConsole 
+                      agents={agents}
+                      onAddLog={handleAddLog}
+                      onUpdateAgentTask={handleUpdateAgentTask}
+                    />
+                  </div>
+
+                  <div className="lg:col-span-1 bg-[#070709] border border-neutral-800 p-4 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-bold">Agent Queue</h4>
+                      <div className="text-xs text-neutral-400">实时</div>
+                    </div>
+                    <div className="space-y-2 max-h-[28rem] overflow-y-auto">
+                      {agentQueue.length === 0 && (
+                        <div className="text-xs text-neutral-500">当前无待处理任务</div>
+                      )}
+                      {agentQueue.map((t: any) => (
+                        <div key={t.id} className="p-2 rounded border border-neutral-800 bg-neutral-900/30">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-semibold text-sm">{t.title || t.id}</div>
+                              <div className="text-xs text-neutral-400">{t.agentId || t.assignee || '未指派'}</div>
+                            </div>
+                            <div className="text-xs text-neutral-400">{t.status}</div>
+                          </div>
+                          <div className="flex items-center gap-2 mt-2">
+                            <button onClick={() => handleLeaseAsWorker(t.id)} className="px-2 py-1 text-xs bg-emerald-600/20 text-emerald-300 rounded">租出</button>
+                            <button onClick={() => handleCompleteAsWorker(t)} className="px-2 py-1 text-xs bg-sky-600/20 text-sky-300 rounded">完成</button>
+                            <button onClick={() => navigator.clipboard?.writeText(JSON.stringify(t))} className="px-2 py-1 text-xs bg-neutral-800/20 text-neutral-400 rounded">拷贝</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3 flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <button onClick={fetchAgentQueue} className="px-3 py-2 bg-[#1D9BF0] text-white rounded text-sm">刷新</button>
+                        <button onClick={() => handleLeaseAsWorker()} className="px-3 py-2 bg-emerald-500 text-white rounded text-sm">工人拉取</button>
+                        <button onClick={handleRequeueExpired} className="px-3 py-2 bg-yellow-600 text-white rounded text-sm">强制回收</button>
+                      </div>
+                      <div className="text-xs text-neutral-400">失败任务: <strong className="text-red-400">{failedCount}</strong></div>
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -832,6 +930,25 @@ export default function AIRuntimeView({ onBackToLanding }: { onBackToLanding: ()
                   
                   {/* Left list */}
                   <div className="lg:col-span-7 space-y-3">
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold text-neutral-400 block">实时后台 Agent 任务队列 ({tenantId}):</span>
+                      <div className="space-y-2.5 max-h-[14rem] overflow-y-auto pr-1">
+                        {agentQueue.length === 0 ? (
+                          <div className="rounded-xl border border-neutral-850 bg-neutral-950/70 p-4 text-[11px] text-neutral-500">
+                            当前无待处理任务。后台任务队列已与 `/api/agents/tasks` 实时连接。
+                          </div>
+                        ) : agentQueue.map((task) => (
+                          <div key={task.id} className="rounded-xl border border-neutral-805 bg-neutral-900/10 p-4 text-[11px] text-neutral-300">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-bold text-white">{task.title || task.agentId || 'Task'}</span>
+                              <span className="text-[10px] text-neutral-500">{task.status || 'PENDING'}</span>
+                            </div>
+                            <div className="mt-2 text-[10px] text-neutral-400">{task.logs?.slice(-1)[0] || task.title}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     <span className="text-[10px] font-bold text-neutral-400 block">注册中的定时 Cron 任务:</span>
                     <div className="space-y-2.5 max-h-[22rem] overflow-y-auto pr-1">
                       {crons.map((c) => (
